@@ -1,17 +1,19 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
-    FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, SearchIcon, PlusIcon, EyeIcon, PDFIcon, FileTextIcon, CheckIcon, SaveIcon
+    FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, SearchIcon, PlusIcon, EyeIcon, PDFIcon, FileTextIcon, DocxIcon, CheckIcon, SaveIcon
 } from '../../Icons';
 import { generatePIPDF } from '../../../utils/pipdfgenerator';
 import { generatePI2PDF } from '../../../utils/pi2pdfgenerator';
 import { generateBankApplicationPDF, calculateAmendmentIncreaseValues } from '../../../utils/islbankApplicationGenerator';
+import { generateBankApplicationDocx } from '../../../utils/docxApplicationGenerator';
 import { API_BASE_URL, formatDate, SortIcon } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import { decryptData } from '../../../utils/encryption';
 import { queryClient } from '../../../utils/queryClient';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import PaginationBar from '../../shared/PaginationBar';
+import DocumentExportModal from '../../shared/DocumentExportModal';
 import './PI.css';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { IPDetailsModal } from '../IPManagement/IPDetailsModal';
@@ -26,7 +28,7 @@ const PiMobileCard = React.memo(({
     isExpanded,
     onToggleExpand,
     onView,
-    onPdf,
+    onExportOptions,
     onEdit,
     onDelete,
     onOpenIpDetails,
@@ -286,16 +288,16 @@ const PiMobileCard = React.memo(({
                             type="button"
                             onClick={(e) => {
                                 e.stopPropagation();
-                                onPdf(record);
+                                onExportOptions?.(record);
                             }}
                             className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
-                            title="Generate PDF"
+                            title="Export Options (PDF / DOCX)"
                         >
-                            <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b] group-hover:border-[#cbd5e1] group-hover:scale-105 group-active:scale-95 shrink-0">
+                            <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-[#f1f5f9] group-hover:text-red-600 group-hover:border-red-200 group-hover:scale-105 group-active:scale-95 shrink-0">
                                 <PDFIcon className="w-5 h-5 transition-transform duration-150" />
                             </div>
-                            <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-[#1e293b]">
-                                PDF
+                            <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-red-600">
+                                Export
                             </span>
                         </button>
 
@@ -480,7 +482,7 @@ const PiHistoryExplorerModal = React.memo(({
         }
     };
 
-    const handlePrintCurrentBankApp = () => {
+    const handlePrintCurrentBankApp = async () => {
         const origRev = timeline.find(t => t.isOriginal || t.reviseNo === 'Original PI') || timeline[0] || viewHistoryRecord;
         const prevRev = activeHistoryIndex > 0 ? timeline[activeHistoryIndex - 1] : origRev;
 
@@ -526,7 +528,11 @@ const PiHistoryExplorerModal = React.memo(({
                 enriched.partySignature = enriched.partySignature || imp.signature;
             }
         }
-        generateBankApplicationPDF(enriched);
+        try {
+            await generateBankApplicationDocx(enriched);
+        } catch (err) {
+            console.error('Error generating Bank Application DOCX:', err);
+        }
     };
 
     const handleEditCurrentRevision = () => {
@@ -662,13 +668,13 @@ const PiHistoryExplorerModal = React.memo(({
                                 type="button"
                                 onClick={handlePrintCurrentBankApp}
                                 className="group flex flex-col items-center justify-center gap-1 cursor-pointer active:scale-95 transition-transform bg-transparent border-0 outline-none select-none min-w-[50px]"
-                                title="Bank Application"
+                                title="Download Bank Application (DOCX)"
                             >
-                                <div className="w-11 h-11 rounded-full flex items-center justify-center bg-emerald-50 text-emerald-700 border border-emerald-200/90 shadow-2xs group-hover:bg-emerald-100 transition-colors shrink-0">
-                                    <FileTextIcon className="w-5 h-5 text-emerald-600" />
+                                <div className="w-11 h-11 rounded-full flex items-center justify-center bg-blue-50 text-blue-700 border border-blue-200/90 shadow-2xs group-hover:bg-blue-100 transition-colors shrink-0">
+                                    <DocxIcon className="w-5 h-5 text-blue-600" />
                                 </div>
                                 <span className="text-[10px] font-bold text-gray-700 leading-tight">
-                                    Bank App
+                                    Bank App (DOCX)
                                 </span>
                             </button>
                         )}
@@ -1009,10 +1015,11 @@ const PiHistoryExplorerModal = React.memo(({
                                             <button
                                                 type="button"
                                                 onClick={handlePrintCurrentBankApp}
-                                                className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
+                                                className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
+                                                title="Download Bank Application (DOCX)"
                                             >
-                                                <FileTextIcon className="w-4 h-4 text-white shrink-0" />
-                                                <span>Bank Application</span>
+                                                <DocxIcon className="w-4 h-4 text-white shrink-0" />
+                                                <span>Bank Application (DOCX)</span>
                                             </button>
                                         )}
                                         {canManage && (
@@ -1264,6 +1271,7 @@ function PI({
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const [toast, setToast] = useState(null);
+    const [exportModalState, setExportModalState] = useState({ isOpen: false, record: null });
     const [expandedCardId, setExpandedCardId] = useState(null);
     const [showReviseForm, setShowReviseForm] = useState(false);
     const [showTenPercentForm, setShowTenPercentForm] = useState(false);
@@ -4727,7 +4735,7 @@ function PI({
         });
     };
 
-    const handlePrintReviseBankApplication = () => {
+    const handlePrintReviseBankApplication = async () => {
         if (!selectedPiForRevise) {
             showToast('Please select a PI Number first.', 'error');
             return;
@@ -4787,7 +4795,11 @@ function PI({
             }
         }
 
-        generateBankApplicationPDF(enriched);
+        try {
+            await generateBankApplicationDocx(enriched);
+        } catch (err) {
+            console.error('Error generating Bank Application DOCX:', err);
+        }
     };
 
     const getEnrichedPiForPdf = useCallback((record) => {
@@ -5628,6 +5640,18 @@ function PI({
             generatePI2PDF(enriched);
         } else {
             generatePIPDF(enriched);
+        }
+    }, [getEnrichedPiForPdf]);
+
+    const handleDownloadBankAppDocx = useCallback(async (record) => {
+        const enriched = getEnrichedPiForPdf(record);
+        if (!enriched) return;
+        try {
+            await generateBankApplicationDocx(enriched);
+            showToast('Bank Application (DOCX) generated successfully!', 'success');
+        } catch (err) {
+            console.error('Error generating Bank Application DOCX:', err);
+            showToast('Failed to generate Bank Application DOCX', 'error');
         }
     }, [getEnrichedPiForPdf]);
 
@@ -8368,11 +8392,11 @@ function PI({
                                             <button
                                                 type="button"
                                                 onClick={handlePrintReviseBankApplication}
-                                                className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-95 text-center"
-                                                title="Preview / Print Amendment Bank Application"
+                                                className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-95 text-center"
+                                                title="Download Amendment Bank Application (DOCX)"
                                             >
-                                                <FileTextIcon className="w-4 h-4 text-white shrink-0" />
-                                                <span>Bank Application</span>
+                                                <DocxIcon className="w-4 h-4 text-white shrink-0" />
+                                                <span>Bank Application (DOCX)</span>
                                             </button>
                                         )}
                                         <button
@@ -9118,9 +9142,9 @@ function PI({
                                                                 <EyeIcon className="w-5 h-5" />
                                                             </button>
                                                             <button
-                                                                onClick={() => handlePdfRecord(record)}
-                                                                className="p-1.5 text-gray-400 hover:text-blue-600 transition-all active:scale-90"
-                                                                title="Download PDF"
+                                                                onClick={() => setExportModalState({ isOpen: true, record })}
+                                                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all active:scale-90"
+                                                                title="Export Options (PDF / DOCX)"
                                                             >
                                                                 <PDFIcon className="w-5 h-5" />
                                                             </button>
@@ -9182,7 +9206,7 @@ function PI({
                                         isExpanded={isExpanded}
                                         onToggleExpand={handleToggleCardExpand}
                                         onView={handleViewRecord}
-                                        onPdf={handlePdfRecord}
+                                        onExportOptions={(rec) => setExportModalState({ isOpen: true, record: rec })}
                                         onEdit={handleEditRecord}
                                         onDelete={handleDeleteRecord}
                                         onOpenIpDetails={handleOpenIpDetails}
@@ -9387,6 +9411,33 @@ function PI({
                     </div>
                 </div>,
                 document.body
+            )}
+
+            {exportModalState.isOpen && exportModalState.record && (
+                <DocumentExportModal
+                    isOpen={exportModalState.isOpen}
+                    onClose={() => setExportModalState({ isOpen: false, record: null })}
+                    title={`Proforma Invoice (${exportModalState.record.piNumber || ''})`}
+                    subtitle="Select your preferred format to print or export PI documents"
+                    badgeText="EXPORT OPTIONS"
+                    pdfTitle="PI PDF"
+                    pdfBadge="Print / Preview"
+                    pdfDescription="Open printable PI PDF in a new tab"
+                    docxTitle="Application DOCX"
+                    docxBadge=".docx File"
+                    docxDescription="Download editable Bank Application letter in Word format"
+                    bothTitle="PI PDF + Application DOCX"
+                    bothBadge="DUAL"
+                    bothDescription="Open PI PDF in new tab and download Application DOCX"
+                    onExportPdf={() => handlePdfRecord(exportModalState.record)}
+                    onExportDocx={() => handleDownloadBankAppDocx(exportModalState.record)}
+                    onExportBoth={() => {
+                        handlePdfRecord(exportModalState.record);
+                        setTimeout(() => {
+                            handleDownloadBankAppDocx(exportModalState.record);
+                        }, 300);
+                    }}
+                />
             )}
         </div>
     );

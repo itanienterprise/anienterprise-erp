@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
-    XIcon, EyeIcon, PDFIcon, FileTextIcon
+    XIcon, EyeIcon, PDFIcon, FileTextIcon, DocxIcon
 } from '../../Icons';
 import { generatePIPDF } from '../../../utils/pipdfgenerator';
 import { generatePI2PDF } from '../../../utils/pi2pdfgenerator';
 import { generateBankApplicationPDF, calculateAmendmentIncreaseValues } from '../../../utils/islbankApplicationGenerator';
+import { generateBankApplicationDocx } from '../../../utils/docxApplicationGenerator';
 import { formatDate } from '../../../utils/helpers';
 import { IPDetailsModal } from '../IPManagement/IPDetailsModal';
 
@@ -302,7 +303,7 @@ export const PIDetailsModal = ({
         }
     };
 
-    const handlePrintBankApplication = () => {
+    const handlePrintBankApplication = async () => {
         if (!resolvedPi) return;
         const origRev = timeline.find(t => t.isOriginal || t.reviseNo === 'Original PI') || timeline[0] || resolvedPi;
         const prevRev = activeHistoryIndex > 0 ? timeline[activeHistoryIndex - 1] : origRev;
@@ -357,7 +358,11 @@ export const PIDetailsModal = ({
             if (b) enriched.bankBranch = b.branch;
         }
 
-        generateBankApplicationPDF(enriched);
+        try {
+            await generateBankApplicationDocx(enriched);
+        } catch (err) {
+            console.error('Error generating Bank Application DOCX:', err);
+        }
     };
 
     if (!resolvedPi || typeof document === 'undefined' || !document.body) return null;
@@ -437,13 +442,13 @@ export const PIDetailsModal = ({
                                 <button
                                     type="button"
                                     onClick={handlePrintBankApplication}
-                                    className="w-11 h-11 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white border border-emerald-200/80 shadow-sm flex items-center justify-center transition-all transform active:scale-95"
-                                    title="Bank Application"
-                                    aria-label="Bank Application"
+                                    className="w-11 h-11 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white border border-blue-200/80 shadow-sm flex items-center justify-center transition-all transform active:scale-95"
+                                    title="Download Bank Application (DOCX)"
+                                    aria-label="Download Bank Application (DOCX)"
                                 >
-                                    <FileTextIcon className="w-5 h-5 shrink-0" />
+                                    <DocxIcon className="w-5 h-5 shrink-0" />
                                 </button>
-                                <span className="text-[10px] font-bold text-gray-600 text-center leading-tight">Bank App</span>
+                                <span className="text-[10px] font-bold text-gray-600 text-center leading-tight">Bank App (DOCX)</span>
                             </div>
                         )}
                     </div>
@@ -741,10 +746,11 @@ export const PIDetailsModal = ({
                                         <button
                                             type="button"
                                             onClick={handlePrintBankApplication}
-                                            className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-sm rounded-xl shadow-md transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                                            className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-sm rounded-xl shadow-md transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                                            title="Download Bank Application (DOCX)"
                                         >
-                                            <FileTextIcon className="w-4 h-4 text-white" />
-                                            <span>Bank Application</span>
+                                            <DocxIcon className="w-4 h-4 text-white" />
+                                            <span>Bank Application (DOCX)</span>
                                         </button>
                                     )}
                                 </div>

@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
-    FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, SearchIcon, PlusIcon, EyeIcon, PDFIcon, CheckIcon
+    FunnelIcon, XIcon, ChevronDownIcon, EditIcon, TrashIcon, SearchIcon, PlusIcon, EyeIcon, PDFIcon, DocxIcon, CheckIcon
 } from '../../Icons';
 import { generatePLPDF } from '../../../utils/plpdfgenerator';
 import { generatePL2PDF } from '../../../utils/pl2pdfgenerator';
+import { generateNocApplicationDocx } from '../../../utils/docxApplicationGenerator';
 import { preloadAlgerianFont } from '../../../utils/algerianFontLoader';
 import { API_BASE_URL, formatDate } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import { queryClient } from '../../../utils/queryClient';
 import CustomDatePicker from '../../shared/CustomDatePicker';
 import PaginationBar from '../../shared/PaginationBar';
+import DocumentExportModal from '../../shared/DocumentExportModal';
 import './PackingList.css';
 import { hasPermission } from '../../../utils/permissionHelper';
 import { PIDetailsModal } from '../PI/PIDetailsModal';
@@ -171,6 +173,7 @@ function PackingList({
     const [isLoading, setIsLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState(null);
+    const [exportModalState, setExportModalState] = useState({ isOpen: false, record: null });
     const [emptyFieldsModal, setEmptyFieldsModal] = useState({
         isOpen: false,
         emptyFields: [],
@@ -1409,6 +1412,24 @@ function PackingList({
         }
 
         executeSubmit();
+    };
+
+    const handleDownloadNocDocx = async (record) => {
+        try {
+            await generateNocApplicationDocx(record, {
+                piRecords,
+                lcRecords,
+                importers,
+                exporters,
+                banks,
+                ipRecords,
+                products
+            });
+            showToast('Bank NOC Application (DOCX) generated successfully!', 'success');
+        } catch (err) {
+            console.error('NOC DOCX generation failed:', err);
+            showToast('Failed to generate Bank NOC Application DOCX.', 'error');
+        }
     };
 
     const handleEditClick = (record) => {
@@ -3373,15 +3394,8 @@ function PackingList({
                                                     )}
                                                     <td className="px-6 py-4 text-right space-x-2">
                                                         <button
-                                                            onClick={async () => {
-                                                                try {
-                                                                    await generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups, products);
-                                                                } catch (err) {
-                                                                    console.error('PDF generation failed:', err);
-                                                                    showToast('Failed to generate PDF.', 'error');
-                                                                }
-                                                            }}
-                                                            title="Download PDF"
+                                                            onClick={() => setExportModalState({ isOpen: true, record: rec })}
+                                                            title="Export Options (PDF / DOCX)"
                                                             className="p-1.5 text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-200 rounded-lg transition-all"
                                                         >
                                                             <PDFIcon className="w-4 h-4" />
@@ -3600,23 +3614,18 @@ function PackingList({
                                                         <div className="pt-3 border-t border-gray-100 flex items-start justify-around gap-1 mt-4">
                                                             <button
                                                                 type="button"
-                                                                onClick={async (e) => {
+                                                                onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                    try {
-                                                                        await generatePL2PDF(rec, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups, products);
-                                                                    } catch (err) {
-                                                                        console.error('PDF generation failed:', err);
-                                                                        showToast('Failed to generate PDF.', 'error');
-                                                                    }
+                                                                    setExportModalState({ isOpen: true, record: rec });
                                                                 }}
                                                                 className="group flex-1 flex flex-col items-center justify-center gap-1.5 py-1 px-1 min-w-0 transition-transform active:scale-95 cursor-pointer bg-transparent border-0"
-                                                                title="Download PDF"
+                                                                title="Export Options (PDF / DOCX)"
                                                             >
-                                                                <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-[#f1f5f9] group-hover:text-[#1e293b] group-hover:border-[#cbd5e1] group-hover:scale-105 group-active:scale-95 shrink-0">
+                                                                <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[#f8fafc] border border-[#e2e8f0] text-[#475569] shadow-[0_2px_6px_rgba(0,0,0,0.04)] transition-all duration-200 group-hover:bg-[#f1f5f9] group-hover:text-red-600 group-hover:border-red-200 group-hover:scale-105 group-active:scale-95 shrink-0">
                                                                     <PDFIcon className="w-5 h-5 transition-transform duration-150" />
                                                                 </div>
-                                                                <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-[#1e293b]">
-                                                                    PDF
+                                                                <span className="text-[11.5px] font-semibold text-[#475569] text-center leading-[1.2] tracking-[-0.01em] transition-colors group-hover:text-red-600">
+                                                                    Export
                                                                 </span>
                                                             </button>
 
@@ -3844,6 +3853,44 @@ function PackingList({
                     </div>
                 </div>,
                 document.body
+            )}
+
+            {exportModalState.isOpen && exportModalState.record && (
+                <DocumentExportModal
+                    isOpen={exportModalState.isOpen}
+                    onClose={() => setExportModalState({ isOpen: false, record: null })}
+                    title={`Packing List (${exportModalState.record.packingListNumber || exportModalState.record.lcNo || ''})`}
+                    subtitle="Select your preferred format to print or export Packing List documents"
+                    badgeText="EXPORT OPTIONS"
+                    pdfTitle="PL PDF"
+                    pdfBadge="Print / Preview"
+                    pdfDescription="Open printable Packing List PDF in a new tab"
+                    docxTitle="Application DOCX"
+                    docxBadge=".docx File"
+                    docxDescription="Download editable Bank NOC Application letter in Word format"
+                    bothTitle="PL PDF + Application DOCX"
+                    bothBadge="DUAL"
+                    bothDescription="Open PL PDF in new tab and download Application DOCX"
+                    onExportPdf={async () => {
+                        try {
+                            await generatePL2PDF(exportModalState.record, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups, products);
+                        } catch (err) {
+                            console.error('PDF generation failed:', err);
+                            showToast('Failed to generate PDF.', 'error');
+                        }
+                    }}
+                    onExportDocx={() => handleDownloadNocDocx(exportModalState.record)}
+                    onExportBoth={async () => {
+                        try {
+                            await generatePL2PDF(exportModalState.record, piRecords, lcRecords, importers, exporters, banks, ipRecords, trSetups, products);
+                        } catch (err) {
+                            console.error('PDF generation failed:', err);
+                        }
+                        setTimeout(() => {
+                            handleDownloadNocDocx(exportModalState.record);
+                        }, 300);
+                    }}
+                />
             )}
         </div>
     );
