@@ -295,6 +295,8 @@ async function cascadeDealReceiveUpdate(dealReceiveId, newDr = {}, oldDr = {}, c
     const brandVal = (newDr.brand || '').trim();
     const invoiceNoVal = (newDr.invoiceNo || '').trim();
     const truckNoVal = (newDr.truckNo || (Array.isArray(newDr.truckNumbers) ? newDr.truckNumbers.filter(Boolean).join(', ') : '') || '').trim();
+    const cleanNewTruck = cleanId(truckNoVal);
+    const cleanOldTruck = cleanId(oldDr.truckNo);
 
     try {
         // ─── 1. DOWNSTREAM: Update matching Cost of Goods ───────────────────
@@ -461,7 +463,7 @@ async function cascadeDealReceiveUpdate(dealReceiveId, newDr = {}, oldDr = {}, c
         }
 
         // Direct fallback: Update Stock directly if invoice matches
-        if (cleanNewInv || cleanOldInv) {
+        if (cleanNewInv || cleanOldInv || cleanNewTruck || cleanOldTruck) {
             const stockDocs = await Stock.find({});
             for (const doc of stockDocs) {
                 if (visited.stocks.has(String(doc._id))) continue;
@@ -470,12 +472,24 @@ async function cascadeDealReceiveUpdate(dealReceiveId, newDr = {}, oldDr = {}, c
                 if (!stock) continue;
 
                 const stInvClean = cleanId(stock.invoiceNo);
+                const stTruckClean = cleanId(stock.truckNo);
                 const matchesInv = (cleanNewInv && stInvClean === cleanNewInv) || (cleanOldInv && stInvClean === cleanOldInv);
-                if (!matchesInv) continue;
+                const matchesTruck = (cleanNewTruck && stTruckClean === cleanNewTruck) || (cleanOldTruck && stTruckClean === cleanOldTruck);
+                let hasMatchingEntry = false;
+                if (Array.isArray(stock.entries)) {
+                    hasMatchingEntry = stock.entries.some(e => {
+                        const eInv = cleanId(e.invoiceNo);
+                        const eTruck = cleanId(e.truckNo);
+                        return (cleanNewInv && eInv === cleanNewInv) ||
+                               (cleanOldInv && eInv === cleanOldInv) ||
+                               (cleanNewTruck && eTruck === cleanNewTruck) ||
+                               (cleanOldTruck && eTruck === cleanOldTruck);
+                    });
+                }
+                if (!matchesInv && !matchesTruck && !hasMatchingEntry) continue;
 
                 visited.stocks.add(String(doc._id));
                 let stockModified = false;
-                // Preserve internal catalog productName and verified arrival brand on Stock (do not overwrite with external trade names)
                 if (invoiceNoVal && stock.invoiceNo !== invoiceNoVal) {
                     stock.invoiceNo = invoiceNoVal;
                     stockModified = true;
@@ -484,23 +498,44 @@ async function cascadeDealReceiveUpdate(dealReceiveId, newDr = {}, oldDr = {}, c
                     stock.truckNo = truckNoVal;
                     stockModified = true;
                 }
+                if (productVal) {
+                    if (stock.productName !== productVal) {
+                        stock.productName = productVal;
+                        stockModified = true;
+                    }
+                    if (stock.product && stock.product !== productVal) {
+                        stock.product = productVal;
+                        stockModified = true;
+                    }
+                }
+                if (brandVal && stock.brand !== brandVal) {
+                    stock.brand = brandVal;
+                    stockModified = true;
+                }
                 if (newDr.quantity !== undefined && newDr.quantity !== '' && String(stock.invoiceQty) !== String(newDr.quantity)) {
                     stock.invoiceQty = String(newDr.quantity);
                     stockModified = true;
                 }
-                if (newDr.costingKg !== undefined && newDr.costingKg !== '' && String(stock.purchasedPrice) !== String(newDr.costingKg)) {
-                    stock.purchasedPrice = String(newDr.costingKg);
+                const costingVal = newDr.costingKg !== undefined && newDr.costingKg !== '' ? newDr.costingKg : calculateCostingValues(newDr).costingKg;
+                if (costingVal !== undefined && costingVal !== '' && String(stock.purchasedPrice) !== String(costingVal)) {
+                    stock.purchasedPrice = String(costingVal);
                     stockModified = true;
                 }
 
                 if (Array.isArray(stock.entries)) {
                     stock.entries.forEach(entry => {
                         const eInv = cleanId(entry.invoiceNo);
-                        if ((cleanNewInv && eInv === cleanNewInv) || (cleanOldInv && eInv === cleanOldInv)) {
+                        const eTruck = cleanId(entry.truckNo);
+                        if ((cleanNewInv && eInv === cleanNewInv) || (cleanOldInv && eInv === cleanOldInv) || (cleanNewTruck && eTruck === cleanNewTruck) || (cleanOldTruck && eTruck === cleanOldTruck)) {
                             if (invoiceNoVal) entry.invoiceNo = invoiceNoVal;
                             if (truckNoVal) entry.truckNo = truckNoVal;
+                            if (productVal) {
+                                entry.productName = productVal;
+                                if (entry.product) entry.product = productVal;
+                            }
+                            if (brandVal) entry.brand = brandVal;
                             if (newDr.quantity !== undefined && newDr.quantity !== '') entry.invoiceQty = String(newDr.quantity);
-                            if (newDr.costingKg !== undefined && newDr.costingKg !== '') entry.purchasedPrice = String(newDr.costingKg);
+                            if (costingVal !== undefined && costingVal !== '') entry.purchasedPrice = String(costingVal);
                             stockModified = true;
                         }
                     });
@@ -657,7 +692,6 @@ async function cascadeCostOfGoodsUpdate(cogId, newCog = {}, oldCog = {}, context
                     stock.matchedCogId = normCogId;
                     stockModified = true;
                 }
-                // Preserve internal catalog productName and verified arrival brand on Stock (do not overwrite with COG trade names)
 
                 if (targetInvoiceNo && stock.invoiceNo !== targetInvoiceNo) {
                     stock.invoiceNo = targetInvoiceNo;
@@ -666,6 +700,22 @@ async function cascadeCostOfGoodsUpdate(cogId, newCog = {}, oldCog = {}, context
 
                 if (targetTruckNo && stock.truckNo !== targetTruckNo) {
                     stock.truckNo = targetTruckNo;
+                    stockModified = true;
+                }
+
+                if (targetProduct) {
+                    if (stock.productName !== targetProduct) {
+                        stock.productName = targetProduct;
+                        stockModified = true;
+                    }
+                    if (stock.product && stock.product !== targetProduct) {
+                        stock.product = targetProduct;
+                        stockModified = true;
+                    }
+                }
+
+                if (targetBrand && stock.brand !== targetBrand) {
+                    stock.brand = targetBrand;
                     stockModified = true;
                 }
 
@@ -691,6 +741,11 @@ async function cascadeCostOfGoodsUpdate(cogId, newCog = {}, oldCog = {}, context
                         if (normCogId) entry.matchedCogId = normCogId;
                         if (targetInvoiceNo) entry.invoiceNo = targetInvoiceNo;
                         if (targetTruckNo) entry.truckNo = targetTruckNo;
+                        if (targetProduct) {
+                            entry.productName = targetProduct;
+                            if (entry.product) entry.product = targetProduct;
+                        }
+                        if (targetBrand) entry.brand = targetBrand;
                         if (targetPrice) entry.purchasedPrice = targetPrice;
                         if (targetQty) entry.invoiceQty = targetQty;
                         stockModified = true;
@@ -915,62 +970,15 @@ async function cascadeCostOfGoodsUpdate(cogId, newCog = {}, oldCog = {}, context
 }
 
 /**
- * Reconciles and synchronizes all historical Purchase Deals, Deal Receives, Cost of Goods, and LC Receives.
+ * Safe no-op to prevent any bulk modification of historical data.
  */
 async function syncAllPurchaseDealCascades() {
-    const totalCounts = {
+    return {
         dealReceives: 0,
         costOfGoods: 0,
         stocks: 0,
         lcPurchases: 0
     };
-
-    try {
-        // 1. Sync from Deals downstream
-        const deals = await LCPurchase.find({});
-        for (const dealDoc of deals) {
-            const deal = getDecrypted(dealDoc);
-            if (!deal) continue;
-            const res = await cascadePurchaseDealUpdate(dealDoc._id, deal, deal);
-            if (res && res.counts) {
-                totalCounts.dealReceives += res.counts.dealReceives || 0;
-                totalCounts.costOfGoods += res.counts.costOfGoods || 0;
-                totalCounts.stocks += res.counts.stocks || 0;
-            }
-        }
-
-        // 2. Sync from Deal Receives
-        const drs = await DealReceive.find({});
-        for (const drDoc of drs) {
-            const dr = getDecrypted(drDoc);
-            if (!dr) continue;
-            const res = await cascadeDealReceiveUpdate(drDoc._id, dr, dr);
-            if (res && res.counts) {
-                totalCounts.costOfGoods += res.counts.costOfGoods || 0;
-                totalCounts.stocks += res.counts.stocks || 0;
-                totalCounts.lcPurchases += res.counts.lcPurchases || 0;
-            }
-        }
-
-        // 3. Sync from COGs
-        const cogs = await CostOfGoods.find({});
-        for (const cogDoc of cogs) {
-            const cog = getDecrypted(cogDoc);
-            if (!cog) continue;
-            const res = await cascadeCostOfGoodsUpdate(cogDoc._id, cog, cog);
-            if (res && res.counts) {
-                totalCounts.stocks += res.counts.stocks || 0;
-                totalCounts.dealReceives += res.counts.dealReceives || 0;
-                totalCounts.lcPurchases += res.counts.lcPurchases || 0;
-            }
-        }
-
-        console.log('Bidirectional Purchase Deal <-> Deal Receive <-> COG <-> Stock sync completed:', totalCounts);
-    } catch (err) {
-        console.error('Error syncing all purchase deal cascades:', err);
-    }
-
-    return totalCounts;
 }
 
 module.exports = {

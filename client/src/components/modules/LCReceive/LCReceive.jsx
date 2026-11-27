@@ -74,7 +74,9 @@ const ViewDetailsModal = ({ data, costOfGoods = [], employeesMap = {}, onClose }
                 return lcMatch && invoiceMatch;
             });
             const invQty = item.invoiceQty !== undefined && item.invoiceQty !== null && item.invoiceQty !== '' ? (parseFloat(item.invoiceQty) || 0) : (matchedCog ? (parseFloat(matchedCog.quantity) || 0) : 0);
-            acc[key] = { ...item, quantity: 0, sweepedQuantity: 0, inHouseQuantity: 0, packet: 0, invoiceQty: invQty };
+            const costing = matchedCog ? getCogCostingDetails(matchedCog) : null;
+            const currentPrice = costing?.price ? parseFloat(costing.price) : (parseFloat(item.purchasedPrice) || 0);
+            acc[key] = { ...item, quantity: 0, sweepedQuantity: 0, inHouseQuantity: 0, packet: 0, invoiceQty: invQty, purchasedPrice: currentPrice };
         }
         const arrQty = parseFloat(item.quantity) || 0;
         const swpQty = parseFloat(item.sweepedQuantity) || 0;
@@ -941,11 +943,14 @@ function LCReceive({
         }
     };
 
-    const fetchCostOfGoods = async () => {
+    const fetchCostOfGoods = async (force = false) => {
         try {
+            if (force) {
+                queryClient.invalidateQueries({ queryKey: ['cost-of-goods'] });
+            }
             const data = await queryClient.fetchQuery({
                 queryKey: ['cost-of-goods'],
-                queryFn: () => axios.get(`${API_BASE_URL}/api/cost-of-goods`).then(r => Array.isArray(r.data) ? r.data : [])
+                queryFn: () => axios.get(`${API_BASE_URL}/api/cost-of-goods?_t=${Date.now()}`).then(r => Array.isArray(r.data) ? r.data : [])
             });
             setCostOfGoods(data);
         } catch (error) {
@@ -1333,7 +1338,7 @@ function LCReceive({
         const handleRealtimeUpdate = (data) => {
             const mod = (data?.module || '').toLowerCase().trim();
             if (!mod || ['stock', 'lcreceive', 'lc-receive', 'warehouses', 'warehouse', 'cost-of-goods', 'costofgoods', 'cog', 'deal-receives', 'deal-receive', 'dealreceive', 'lc-purchases', 'lc-purchase', 'all'].includes(mod)) {
-                fetchCostOfGoods();
+                fetchCostOfGoods(true);
                 debouncedFetch();
             }
         };
@@ -2213,7 +2218,8 @@ function LCReceive({
                             inHouseQuantity: brandEntry.inHouseQuantity,
                             totalInHousePacket: brandEntry.inHousePacket,
                             totalInHouseQuantity: brandEntry.inHouseQuantity,
-                            invoiceQty: brandEntry.invoiceQty !== undefined ? brandEntry.invoiceQty : ''
+                            invoiceQty: brandEntry.invoiceQty !== undefined ? brandEntry.invoiceQty : '',
+                            matchedCogId: brandEntry.matchedCogId || ''
                         };
 
                         if (brandEntry._id) {
@@ -2270,7 +2276,8 @@ function LCReceive({
                             inHouseQuantity: brandEntry.inHouseQuantity,
                             totalInHousePacket: brandEntry.inHousePacket,
                             totalInHouseQuantity: brandEntry.inHouseQuantity,
-                            invoiceQty: brandEntry.invoiceQty !== undefined ? brandEntry.invoiceQty : ''
+                            invoiceQty: brandEntry.invoiceQty !== undefined ? brandEntry.invoiceQty : '',
+                            matchedCogId: brandEntry.matchedCogId || ''
                         });
                     });
                 });
@@ -2457,12 +2464,14 @@ function LCReceive({
                             return lcMatch && invoiceMatch;
                         });
                         const invQty = e.invoiceQty !== undefined && e.invoiceQty !== '' ? e.invoiceQty : (matchedCog ? (parseFloat(matchedCog.quantity) || '') : '');
+                        const costing = matchedCog ? getCogCostingDetails(matchedCog) : null;
+                        const priceVal = costing?.price ? costing.price : (e.purchasedPrice || '');
 
                         return {
                             _id: e._id,
                             invoiceNo: e.invoiceNo || '',
                             brand: e.brand,
-                            purchasedPrice: e.purchasedPrice,
+                            purchasedPrice: priceVal,
                             packet: e.packet,
                             packetSize: e.packetSize,
                             quantity: e.quantity,
@@ -2529,20 +2538,39 @@ function LCReceive({
                     isMultiBrand: false,
                     productName: resolveProductName(record.productName),
                     truckNo: record.truckNo,
-                    brandEntries: [{
-                        _id: record._id,
-                        invoiceNo: record.invoiceNo || '',
-                        brand: record.brand,
-                        purchasedPrice: record.purchasedPrice,
-                        packet: record.packet,
-                        packetSize: record.packetSize,
-                        quantity: record.quantity,
-                        unit: record.unit,
-                        sweepedPacket: record.sweepedPacket,
-                        sweepedQuantity: record.sweepedQuantity,
-                        inHousePacket: record.inHousePacket,
-                        inHouseQuantity: record.inHouseQuantity
-                    }]
+                    brandEntries: [(() => {
+                        const matchedCog = (costOfGoods || []).find(cog => {
+                            const lcMatch = String(cog.lcNo || '').trim().toLowerCase() === String(record.lcNo || '').trim().toLowerCase();
+                            const invoiceMatch = String(cog.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase();
+                            const prodMatch = !record.productName || !cog.product || String(cog.product).trim().toLowerCase() === String(record.productName).trim().toLowerCase();
+                            const brandMatch = !record.brand || !cog.brand || String(cog.brand).trim().toLowerCase() === String(record.brand).trim().toLowerCase();
+                            return lcMatch && invoiceMatch && prodMatch && brandMatch;
+                        }) || (costOfGoods || []).find(cog => {
+                            const lcMatch = String(cog.lcNo || '').trim().toLowerCase() === String(record.lcNo || '').trim().toLowerCase();
+                            const invoiceMatch = String(cog.invoiceNo || '').trim().toLowerCase() === String(record.invoiceNo || '').trim().toLowerCase();
+                            return lcMatch && invoiceMatch;
+                        });
+                        const costing = matchedCog ? getCogCostingDetails(matchedCog) : null;
+                        const priceVal = costing?.price ? costing.price : (record.purchasedPrice || '');
+                        const invQty = record.invoiceQty !== undefined && record.invoiceQty !== '' ? record.invoiceQty : (matchedCog ? (parseFloat(matchedCog.quantity) || '') : '');
+
+                        return {
+                            _id: record._id,
+                            invoiceNo: record.invoiceNo || '',
+                            brand: record.brand,
+                            purchasedPrice: priceVal,
+                            packet: record.packet,
+                            packetSize: record.packetSize,
+                            quantity: record.quantity,
+                            unit: record.unit,
+                            sweepedPacket: record.sweepedPacket,
+                            sweepedQuantity: record.sweepedQuantity,
+                            inHousePacket: record.inHousePacket,
+                            inHouseQuantity: record.inHouseQuantity,
+                            invoiceQty: invQty,
+                            matchedCogId: record.matchedCogId || matchedCog?._id || ''
+                        };
+                    })()]
                 }]
             });
             // Set the search query for the warehouse search box

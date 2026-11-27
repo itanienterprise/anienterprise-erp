@@ -1017,12 +1017,6 @@ const runSystemSelfHealingMigrations = async () => {
     if (typeof repairAllCustomerSalesHistory === 'function') {
       await repairAllCustomerSalesHistory();
     }
-    if (typeof repairCorruptedGarlicProducts === 'function') {
-      await repairCorruptedGarlicProducts();
-    }
-    if (typeof syncAllPurchaseDealCascades === 'function') {
-      await syncAllPurchaseDealCascades();
-    }
     if (typeof invalidateMemoryCache === 'function') {
       invalidateMemoryCache();
     }
@@ -2852,6 +2846,28 @@ apiRouter.post('/api/cost-of-goods', async (req, res) => {
     invalidateMemoryCache('cost-of-goods');
     broadcastUpdate('cost-of-goods', 'create', { _id: savedRecord._id });
     req._broadcastDone = true;
+
+    // Cascade update to LC Receive (Stock), Deal Receive, and Purchase Deal
+    if (typeof cascadeCostOfGoodsUpdate === 'function') {
+      cascadeCostOfGoodsUpdate(savedRecord._id, req.body, {}).then(cascadeRes => {
+        if (cascadeRes?.counts) {
+          if (cascadeRes.counts.dealReceives > 0) {
+            invalidateMemoryCache('deal-receives');
+            broadcastUpdate('deal-receives', 'update', { reason: 'cog_cascade' });
+          }
+          if (cascadeRes.counts.lcPurchases > 0) {
+            invalidateMemoryCache('lc-purchases');
+            broadcastUpdate('lc-purchases', 'update', { reason: 'cog_cascade' });
+          }
+          if (cascadeRes.counts.stocks > 0) {
+            invalidateMemoryCache('stock');
+            broadcastUpdate('stock', 'update', { reason: 'cog_cascade' });
+          }
+        }
+      }).catch(err => {
+        console.error('Error cascading Cost of Goods create to Stock/Deal/Purchase:', err);
+      });
+    }
     res.status(201).json({ ...req.body, _id: savedRecord._id, createdAt: savedRecord.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -5120,6 +5136,28 @@ apiRouter.post('/api/lc-purchases', async (req, res) => {
     invalidateMemoryCache('lc-purchases');
     broadcastUpdate('lc-purchases', 'create', { _id: newLCPurchase._id, purchaseId: req.body.purchaseId });
     req._broadcastDone = true;
+
+    // Background Cascade: Update all dependent Deal Receive, Cost of Goods, and LC Receive (Stock) records
+    if (typeof cascadePurchaseDealUpdate === 'function') {
+      cascadePurchaseDealUpdate(newLCPurchase._id, req.body, {}).then(cascadeRes => {
+        if (cascadeRes?.counts) {
+          if (cascadeRes.counts.dealReceives > 0) {
+            invalidateMemoryCache('deal-receives');
+            broadcastUpdate('deal-receives', 'update', { reason: 'deal_cascade' });
+          }
+          if (cascadeRes.counts.costOfGoods > 0) {
+            invalidateMemoryCache('cost-of-goods');
+            broadcastUpdate('cost-of-goods', 'update', { reason: 'deal_cascade' });
+          }
+          if (cascadeRes.counts.stocks > 0) {
+            invalidateMemoryCache('stock');
+            broadcastUpdate('stock', 'update', { reason: 'deal_cascade' });
+          }
+        }
+      }).catch(err => {
+        console.error('Error cascading Purchase Deal create to dependent collections:', err);
+      });
+    }
     res.status(201).json({ ...req.body, _id: newLCPurchase._id, createdAt: newLCPurchase.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -5220,6 +5258,28 @@ apiRouter.post('/api/deal-receives', async (req, res) => {
     invalidateMemoryCache('deal-receives');
     broadcastUpdate('deal-receives', 'create', { _id: newDealReceive._id, receiveId: req.body.receiveId });
     req._broadcastDone = true;
+
+    // Background Cascade: Update all dependent Cost of Goods, LC Receive (Stock), and Purchase Deals
+    if (typeof cascadeDealReceiveUpdate === 'function') {
+      cascadeDealReceiveUpdate(newDealReceive._id, req.body, {}).then(cascadeRes => {
+        if (cascadeRes?.counts) {
+          if (cascadeRes.counts.costOfGoods > 0) {
+            invalidateMemoryCache('cost-of-goods');
+            broadcastUpdate('cost-of-goods', 'update', { reason: 'deal_receive_cascade' });
+          }
+          if (cascadeRes.counts.stocks > 0) {
+            invalidateMemoryCache('stock');
+            broadcastUpdate('stock', 'update', { reason: 'deal_receive_cascade' });
+          }
+          if (cascadeRes.counts.lcPurchases > 0) {
+            invalidateMemoryCache('lc-purchases');
+            broadcastUpdate('lc-purchases', 'update', { reason: 'deal_receive_cascade' });
+          }
+        }
+      }).catch(err => {
+        console.error('Error cascading Deal Receive create to dependent collections:', err);
+      });
+    }
     res.status(201).json({ ...req.body, _id: newDealReceive._id, createdAt: newDealReceive.createdAt });
   } catch (err) {
     res.status(400).json({ message: err.message });

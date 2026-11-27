@@ -2148,21 +2148,24 @@ function App() {
     }
   };
 
-  const fetchStockRecords = async () => {
+  const fetchStockRecords = async (force = false) => {
     const cached = queryClient.getQueryData(QUERY_KEYS.stock);
-    if (cached && cached.length > 0) {
+    const queryState = queryClient.getQueryState(QUERY_KEYS.stock);
+    const isInvalidated = queryState?.isInvalidated;
+    if (!force && !isInvalidated && cached && cached.length > 0) {
       setAllStockRecords(cached);
-      const isFresh = queryClient.getQueryState(QUERY_KEYS.stock)?.dataUpdatedAt &&
-        (Date.now() - queryClient.getQueryState(QUERY_KEYS.stock).dataUpdatedAt < 1000 * 60 * 5);
+      const isFresh = queryState?.dataUpdatedAt &&
+        (Date.now() - queryState.dataUpdatedAt < 1000 * 60 * 5);
       if (isFresh) {
         return cached;
       }
-    } else {
+    } else if (!cached || cached.length === 0) {
       setIsLoading(true);
     }
     try {
+      const cacheBuster = `_t=${Date.now()}`;
       const [rawStock] = await Promise.all([
-        axios.get(`${API_BASE_URL}/api/stock`)
+        axios.get(`${API_BASE_URL}/api/stock?${cacheBuster}`)
           .then(r => Array.isArray(r.data) ? r.data : [])
           .catch(() => queryClient.getQueryData(QUERY_KEYS.stock) || []),
         fetchStockBaseline()
@@ -2522,11 +2525,11 @@ function App() {
       }
 
       try {
-        if (['stock', 'stock-baseline', 'warehouses', 'warehouse', 'transfer', 'transfers', 'purchase-receives', 'purchase-receive', 'purchasereceive', 'purchasereceives', 'returns', 'return', 'return-product', 'returnproduct'].includes(module) || module === 'all') {
+        if (['stock', 'stock-baseline', 'warehouses', 'warehouse', 'transfer', 'transfers', 'purchase-receives', 'purchase-receive', 'purchasereceive', 'purchasereceives', 'returns', 'return', 'return-product', 'returnproduct', 'cost-of-goods', 'costofgoods', 'cog', 'lc-purchases', 'lc-purchase', 'lcpurchase', 'deal-receives', 'deal-receive', 'dealreceive'].includes(module) || module === 'all') {
           queryClient.invalidateQueries({ queryKey: ['rawWarehouses'] });
           queryClient.invalidateQueries({ queryKey: ['warehouses'] });
           queryClient.invalidateQueries({ queryKey: ['stock'] });
-          if (typeof fetchStockRecords === 'function') fetchStockRecords();
+          if (typeof fetchStockRecords === 'function') fetchStockRecords(true);
           if (typeof fetchWarehouses === 'function') fetchWarehouses();
         }
       } catch (err) {
