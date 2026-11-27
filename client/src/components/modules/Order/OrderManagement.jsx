@@ -992,12 +992,42 @@ const OrderManagement = ({
         );
     };
 
+    const isGeneralProduct = (prod) => {
+        if (!prod) return false;
+        const name = (prod.name || prod.productName || '').trim().toLowerCase();
+        const ipName = (prod.ipName || '').trim().toLowerCase();
+        const category = (prod.category || '').toUpperCase().trim();
+
+        if (category === 'GENERAL') return true;
+        if (category === 'BORDER') return false;
+
+        const knownBorderPatterns = [
+            'tomato', 'orange', 'kinnow', 'malta', 'apple', 'anar', 'pomegranate', 'grape', 'dates', 'chili', 'chilli', 'drum stick', 'ginger'
+        ];
+        if (knownBorderPatterns.some(pat => name.includes(pat) || ipName.includes(pat))) {
+            return false;
+        }
+
+        const knownGeneralPatterns = [
+            'dal', 'lentil', 'bran', 'wheat', 'rice', 'garlic', 'chick pea', 'chickpea', 'chana', 'maize', 'matpe', 'ground nut', 'groundnut', 'pea'
+        ];
+        if (knownGeneralPatterns.some(pat => name.includes(pat) || ipName.includes(pat))) {
+            return true;
+        }
+
+        return false;
+    };
+
     const getFilteredProducts = () => {
+        const generalProducts = (products || []).filter(isGeneralProduct);
         const search = (productSearch || '').trim().toLowerCase();
-        if (!search) return products || [];
-        return (products || []).filter(p =>
-            (p.name || '').toLowerCase().includes(search)
-        );
+        const filtered = !search
+            ? generalProducts
+            : generalProducts.filter(p =>
+                (p.name || '').toLowerCase().includes(search) ||
+                (p.ipName || '').toLowerCase().includes(search)
+            );
+        return [...filtered].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     };
 
     const getFilteredBrands = (pIdx) => {
@@ -1061,9 +1091,10 @@ const OrderManagement = ({
         }
 
         const search = (brandSearch || '').trim().toLowerCase();
-        return [...brandsSet].filter(Boolean).filter(b =>
-            !search || b.toLowerCase().includes(search)
-        );
+        return [...brandsSet]
+            .filter(Boolean)
+            .filter(b => !search || b.toLowerCase().includes(search))
+            .sort((a, b) => a.localeCompare(b));
     };
 
     const handleProductSelect = (product, pIdx) => {

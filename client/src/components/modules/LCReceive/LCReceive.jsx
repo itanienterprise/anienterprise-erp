@@ -1975,10 +1975,70 @@ function LCReceive({
         }
     }, [products, stockFormData?.productEntries, setStockFormData]);
 
+    const isGeneralProduct = (prodName) => {
+        if (!prodName) return false;
+        const lower = String(prodName).trim().toLowerCase();
+
+        const knownBorderPatterns = [
+            'tomato', 'orange', 'kinnow', 'malta', 'apple', 'anar', 'pomegranate', 'grape', 'dates', 'chili', 'chilli', 'drum stick', 'ginger'
+        ];
+        if (knownBorderPatterns.some(pat => lower.includes(pat))) {
+            return false;
+        }
+
+        const knownGeneralPatterns = [
+            'dal', 'lentil', 'bran', 'wheat', 'rice', 'garlic', 'chick pea', 'chickpea', 'chana', 'maize', 'matpe', 'ground nut', 'groundnut', 'pea'
+        ];
+        if (knownGeneralPatterns.some(pat => lower.includes(pat))) {
+            return true;
+        }
+
+        if (Array.isArray(products) && products.length > 0) {
+            const p = products.find(prod => {
+                const pName = (prod.name || '').trim().toLowerCase();
+                const pIp = (prod.ipName || '').trim().toLowerCase();
+                return pName === lower || pIp === lower || (pName && lower.includes(pName)) || (pIp && lower.includes(pIp));
+            });
+            if (p) {
+                const cat = (p.category || '').toUpperCase().trim();
+                if (cat === 'GENERAL') return true;
+                if (cat === 'BORDER') return false;
+            }
+        }
+
+        return false;
+    };
+
+    const isLcActive = (r) => {
+        if (!r) return false;
+        if (r.status === 'Cancelled') return false;
+        const st = (r.lcStatus || '').trim().toLowerCase();
+        if (st === 'completed') return false;
+        return true;
+    };
+
     const getFilteredLCs = (input) => {
-        if (!input) return lcRecords;
+        const base = (lcRecords || []).filter(r => {
+            if (stockFormData.lcNo && r.lcNo === stockFormData.lcNo) return true;
+            return isLcActive(r) && isGeneralProduct(r.productName);
+        });
+
+        const selectedProd = resolveProductName(stockFormData.productEntries?.[0]?.productName || '');
+        let pool = base;
+        if (selectedProd) {
+            const prodMatches = base.filter(r => {
+                const rProd = resolveProductName(r.productName);
+                return rProd.toLowerCase() === selectedProd.toLowerCase() ||
+                    (r.productName && r.productName.toLowerCase().includes(selectedProd.toLowerCase()));
+            });
+            if (prodMatches.length > 0) {
+                pool = prodMatches;
+            }
+        }
+
+        if (!input) return pool;
         const lowInput = input.toLowerCase();
-        return lcRecords.filter(r =>
+        return pool.filter(r =>
             (r.lcNo || '').toLowerCase().includes(lowInput) ||
             (r.importerName || '').toLowerCase().includes(lowInput) ||
             (r.productName || '').toLowerCase().includes(lowInput)
@@ -3069,12 +3129,15 @@ function LCReceive({
     };
 
     const getFilteredProducts = (input) => {
-        if (!input) return products;
+        const generalProducts = (products || []).filter(isGeneralProduct);
+        if (!input) return [...generalProducts].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         const lowInput = input.toLowerCase();
-        return products.filter(p => 
-            p.name.toLowerCase().includes(lowInput) ||
-            (p.ipName || '').toLowerCase().includes(lowInput)
-        );
+        return generalProducts
+            .filter(p => 
+                p.name.toLowerCase().includes(lowInput) ||
+                (p.ipName || '').toLowerCase().includes(lowInput)
+            )
+            .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     };
 
     const getFilteredBrands = (input, productName) => {
@@ -3101,10 +3164,59 @@ function LCReceive({
         return brandsArr.filter(b => b.toLowerCase().includes(input.toLowerCase()));
     };
 
-    const getFilteredInvoices = (input, currentProductName = '') => {
+    const getFilteredInvoices = (input, currentProductName = '', currentEntryInvoice = '') => {
         if (!stockFormData.lcNo) return [];
+        const cleanLc = String(stockFormData.lcNo || '').trim().toLowerCase();
+        const lcDigits = cleanLc.replace(/\D/g, '');
         const matched = costOfGoods.filter(cog => {
-            return String(cog.lcNo || '').trim().toLowerCase() === String(stockFormData.lcNo).trim().toLowerCase();
+            const cogLc = String(cog.lcNo || '').trim().toLowerCase();
+            return cogLc === cleanLc || (lcDigits && cogLc.replace(/\D/g, '') === lcDigits);
+        });
+
+        // Collect all invoices that have already been received for this LC
+        const editingIds = new Set(
+            (stockFormData.originalIds || [editingId])
+                .filter(Boolean)
+                .map(id => String(id))
+        );
+
+        const receivedInvoices = new Set();
+        const allStocks = (effectiveStockRecords && effectiveStockRecords.length > 0)
+            ? effectiveStockRecords
+            : (stockRecords || []);
+
+        allStocks.forEach(st => {
+            const stId = String(st._id || st.id || '');
+            if (editingIds.has(stId)) return;
+
+            const stLc = String(st.lcNo || '').trim().toLowerCase();
+            const stDigits = stLc.replace(/\D/g, '');
+            const isLcMatch = !cleanLc || !stLc || stLc === cleanLc || (lcDigits && stDigits && lcDigits === stDigits);
+            if (!isLcMatch) return;
+
+            if (st.invoiceNo) {
+                receivedInvoices.add(String(st.invoiceNo).trim().toLowerCase());
+            }
+            if (Array.isArray(st.entries)) {
+                st.entries.forEach(e => {
+                    const eId = String(e._id || e.id || '');
+                    if (editingIds.has(eId)) return;
+                    if (e.invoiceNo) {
+                        receivedInvoices.add(String(e.invoiceNo).trim().toLowerCase());
+                    }
+                });
+            }
+        });
+
+        // Also exclude invoices selected in other brand entries within the current form
+        const currentCleanEntryInv = String(currentEntryInvoice || '').trim().toLowerCase();
+        (stockFormData.productEntries || []).forEach(prod => {
+            (prod.brandEntries || []).forEach(bEntry => {
+                const bInv = String(bEntry.invoiceNo || '').trim().toLowerCase();
+                if (bInv && bInv !== currentCleanEntryInv) {
+                    receivedInvoices.add(bInv);
+                }
+            });
         });
 
         const list = [];
@@ -3113,11 +3225,18 @@ function LCReceive({
         matched.forEach(cog => {
             if (cog.invoiceNo) {
                 const inv = String(cog.invoiceNo).trim();
+                const invLower = inv.toLowerCase();
+
+                // Skip invoices that are already received in LC Receive (unless it's the current entry's selected invoice)
+                if (receivedInvoices.has(invLower) && invLower !== currentCleanEntryInv) {
+                    return;
+                }
+
                 const brand = (cog.brand || '').trim();
                 const prod = (cog.product || '').trim();
                 const qty = parseFloat(cog.quantity) || 0;
                 const price = parseFloat(cog.costingKg) || 0;
-                const uniqueKey = `${inv.toLowerCase()}__${prod.toLowerCase()}__${brand.toLowerCase()}__${qty}`;
+                const uniqueKey = `${invLower}__${prod.toLowerCase()}__${brand.toLowerCase()}__${qty}`;
                 if (!seenKeys.has(uniqueKey)) {
                     seenKeys.add(uniqueKey);
                     list.push({
@@ -4620,7 +4739,7 @@ function LCReceive({
                                                                                             setActiveDropdown(`lcr-invoice-${pIndex}-${bIndex}`);
                                                                                             setHighlightedIndex(-1);
                                                                                         }}
-                                                                                        onKeyDown={(e) => handleDropdownKeyDown(e, `lcr-invoice-${pIndex}-${bIndex}`, (field, val, selectedItem) => { handleBrandEntryChange(pIndex, bIndex, 'invoiceNo', val, selectedItem); setActiveDropdown(null); }, 'invoiceNo', getFilteredInvoices(entry.invoiceNo || '', product.productName))}
+                                                                                        onKeyDown={(e) => handleDropdownKeyDown(e, `lcr-invoice-${pIndex}-${bIndex}`, (field, val, selectedItem) => { handleBrandEntryChange(pIndex, bIndex, 'invoiceNo', val, selectedItem); setActiveDropdown(null); }, 'invoiceNo', getFilteredInvoices(entry.invoiceNo || '', product.productName, entry.invoiceNo))}
                                                                                         className={`w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-12 ${entry.invoiceNo ? 'placeholder:text-gray-900 placeholder:font-semibold' : 'placeholder:text-gray-400'}`}
                                                                                     />
                                                                                     <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
@@ -4634,7 +4753,7 @@ function LCReceive({
                                                                                 </div>
                                                                                 {activeDropdown === `lcr-invoice-${pIndex}-${bIndex}` && (
                                                                                     <div className="absolute z-[60] w-full min-w-[220px] mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-56 overflow-y-auto py-1 divide-y divide-gray-50">
-                                                                                        {getFilteredInvoices(entry.invoiceNo || '', product.productName).map((inv, idx) => (
+                                                                                        {getFilteredInvoices(entry.invoiceNo || '', product.productName, entry.invoiceNo).map((inv, idx) => (
                                                                                             <button
                                                                                                 key={idx}
                                                                                                 type="button"
@@ -4659,7 +4778,7 @@ function LCReceive({
                                                                                                 )}
                                                                                             </button>
                                                                                         ))}
-                                                                                        {getFilteredInvoices(entry.invoiceNo || '', product.productName).length === 0 && (
+                                                                                        {getFilteredInvoices(entry.invoiceNo || '', product.productName, entry.invoiceNo).length === 0 && (
                                                                                             <div className="px-3 py-2 text-sm text-gray-500 italic">No invoices found</div>
                                                                                         )}
                                                                                     </div>

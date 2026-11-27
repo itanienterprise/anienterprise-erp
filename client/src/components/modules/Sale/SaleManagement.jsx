@@ -3584,6 +3584,11 @@ const SaleManagement = ({
 
         if (targetProd) {
             filtered = filtered.filter(lc => isLcMatchingTargetProduct(lc, targetProd, targetIpName));
+        } else if (saleType === 'Border') {
+            filtered = filtered.filter(lc => {
+                const pName = lc.productName || lc.product || '';
+                return isBorderProduct({ name: pName });
+            });
         }
 
         if (saleType !== 'Border' && targetProd) {
@@ -3815,6 +3820,59 @@ const SaleManagement = ({
         return matchedProducts;
     };
 
+    const isGeneralProduct = (prod) => {
+        if (!prod) return false;
+        const name = (prod.name || prod.productName || '').trim().toLowerCase();
+        const ipName = (prod.ipName || '').trim().toLowerCase();
+        const category = (prod.category || '').toUpperCase().trim();
+
+        if (category === 'GENERAL') return true;
+        if (category === 'BORDER') return false;
+
+        const knownBorderPatterns = [
+            'tomato', 'orange', 'kinnow', 'malta', 'apple', 'anar', 'pomegranate', 'grape', 'dates', 'chili', 'chilli', 'drum stick', 'ginger'
+        ];
+        if (knownBorderPatterns.some(pat => name.includes(pat) || ipName.includes(pat))) {
+            return false;
+        }
+
+        const knownGeneralPatterns = [
+            'dal', 'lentil', 'bran', 'wheat', 'rice', 'garlic', 'chick pea', 'chickpea', 'chana', 'maize', 'matpe', 'ground nut', 'groundnut', 'pea'
+        ];
+        if (knownGeneralPatterns.some(pat => name.includes(pat) || ipName.includes(pat))) {
+            return true;
+        }
+
+        return false;
+    };
+
+    const isBorderProduct = (prod) => {
+        if (!prod) return false;
+        const name = (prod.name || prod.productName || '').trim().toLowerCase();
+        if (name === 'payment') return false;
+        const ipName = (prod.ipName || '').trim().toLowerCase();
+        const category = (prod.category || '').toUpperCase().trim();
+
+        if (category === 'BORDER') return true;
+        if (category === 'GENERAL') return false;
+
+        const knownBorderPatterns = [
+            'tomato', 'orange', 'kinnow', 'malta', 'apple', 'anar', 'pomegranate', 'grape', 'dates', 'chili', 'chilli', 'drum stick', 'ginger'
+        ];
+        if (knownBorderPatterns.some(pat => name.includes(pat) || ipName.includes(pat))) {
+            return true;
+        }
+
+        const knownGeneralPatterns = [
+            'dal', 'lentil', 'bran', 'wheat', 'rice', 'garlic', 'chick pea', 'chickpea', 'chana', 'maize', 'matpe', 'ground nut', 'groundnut', 'pea'
+        ];
+        if (knownGeneralPatterns.some(pat => name.includes(pat) || ipName.includes(pat))) {
+            return false;
+        }
+
+        return false;
+    };
+
     const getFilteredProducts = () => {
         let selectedLcNo = '';
         if (saleType === 'Border') {
@@ -3827,16 +3885,25 @@ const SaleManagement = ({
 
         const lcProducts = getProductsForLc(selectedLcNo);
 
-        let targetProducts = products;
+        let targetProducts = products || [];
         if (selectedLcNo && lcProducts.length > 0) {
             targetProducts = lcProducts;
         }
 
+        if (saleType === 'Border') {
+            targetProducts = targetProducts.filter(isBorderProduct);
+        } else {
+            targetProducts = targetProducts.filter(isGeneralProduct);
+        }
+
         const search = (productSearch || '').toLowerCase();
-        return targetProducts.filter(p =>
+        const filtered = targetProducts.filter(p =>
             (p.name || '').toLowerCase().includes(search) ||
+            (p.ipName || '').toLowerCase().includes(search) ||
             (p.hsCode || '').toLowerCase().includes(search)
         );
+
+        return [...filtered].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     };
 
     const getFilteredBrands = (pIdx) => {
@@ -6441,7 +6508,7 @@ const SaleManagement = ({
                                                         autoComplete="off"
                                                         onFocus={() => {
                                                             if (isFieldReadOnly(originalData?.items?.[index]?.productName)) return;
-                                                            setProductSearch(item.productName || '');
+                                                            setProductSearch('');
                                                             setActiveDropdown('product');
                                                             setActiveItemIndex(index);
                                                             setHighlightedIndex(-1);
@@ -6465,6 +6532,9 @@ const SaleManagement = ({
                                                         <button
                                                             type="button"
                                                             onClick={() => {
+                                                                if (activeDropdown !== 'product' || activeItemIndex !== index) {
+                                                                    setProductSearch('');
+                                                                }
                                                                 setActiveDropdown(activeDropdown === 'product' && activeItemIndex === index ? null : 'product');
                                                                 setActiveItemIndex(index);
                                                             }}
