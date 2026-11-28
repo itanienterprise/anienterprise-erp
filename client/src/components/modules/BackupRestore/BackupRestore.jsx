@@ -4,6 +4,8 @@ import { DatabaseIcon, DownloadIcon, UploadIcon, RotateCcwIcon, TrashIcon, XIcon
 import { API_BASE_URL } from '../../../utils/helpers';
 import axios from '../../../utils/api';
 import TableScrollNav from '../../shared/TableScrollNav';
+import BackupProgressModal from './BackupProgressModal';
+import { getSocket } from '../../../utils/socket';
 
 const dbName = 'erp_backup_db';
 const storeName = 'settings';
@@ -113,6 +115,119 @@ const BackupRestore = ({ addNotification }) => {
     const [successMessage, setSuccessMessage] = useState('');
     const fileInputRef = useRef(null);
 
+    // Circular Progress Card Modal state
+    const [progressModal, setProgressModal] = useState({
+        isOpen: false,
+        mode: 'backup', // 'backup' | 'restore'
+        status: 'processing', // 'processing' | 'done' | 'error'
+        progress: 0,
+        title: '',
+        actionText: '',
+        stats: {
+            currentCollection: 0,
+            totalCollections: 0,
+            currentRecords: 0,
+            totalRecords: 0,
+            fileSize: '',
+            fileName: ''
+        },
+        errorMessage: '',
+        jobId: null,
+        downloadBlob: null,
+        downloadFilename: ''
+    });
+
+    // Real-time socket progress tracking for Backup and Restore operations
+    useEffect(() => {
+        const socket = getSocket();
+        if (!socket) return;
+
+        const handleBackupProgress = (data) => {
+            setProgressModal((prev) => {
+                if (!prev.isOpen || prev.mode !== 'backup' || prev.status === 'done') return prev;
+                if (prev.jobId && data.jobId && prev.jobId !== data.jobId) return prev;
+                return {
+                    ...prev,
+                    progress: Math.max(prev.progress, data.percent || 0),
+                    actionText: data.message || prev.actionText,
+                    stats: {
+                        ...prev.stats,
+                        currentCollection: data.current || prev.stats.currentCollection,
+                        totalCollections: data.total || prev.stats.totalCollections,
+                        totalRecords: data.recordsCount ? (prev.stats.totalRecords + data.recordsCount) : prev.stats.totalRecords
+                    }
+                };
+            });
+        };
+
+        const handleRestoreProgress = (data) => {
+            setProgressModal((prev) => {
+                if (!prev.isOpen || prev.mode !== 'restore' || prev.status === 'done') return prev;
+                if (prev.jobId && data.jobId && prev.jobId !== data.jobId) return prev;
+                return {
+                    ...prev,
+                    progress: Math.max(prev.progress, data.percent || 0),
+                    actionText: data.message || prev.actionText,
+                    stats: {
+                        ...prev.stats,
+                        currentCollection: data.current || prev.stats.currentCollection,
+                        totalCollections: data.total || prev.stats.totalCollections,
+                        totalRecords: data.recordsCount ? (prev.stats.totalRecords + data.recordsCount) : prev.stats.totalRecords
+                    }
+                };
+            });
+        };
+
+        socket.on('backup_progress', handleBackupProgress);
+        socket.on('restore_progress', handleRestoreProgress);
+
+        return () => {
+            socket.off('backup_progress', handleBackupProgress);
+            socket.off('restore_progress', handleRestoreProgress);
+        };
+    }, []);
+
+    // Smooth creeping progress while waiting for backend operations
+    useEffect(() => {
+        if (!progressModal.isOpen || progressModal.status !== 'processing') return;
+
+        const interval = setInterval(() => {
+            setProgressModal((prev) => {
+                if (!prev.isOpen || prev.status !== 'processing') return prev;
+                if (prev.progress < 88) {
+                    return {
+                        ...prev,
+                        progress: Math.min(88, prev.progress + 0.8)
+                    };
+                }
+                return prev;
+            });
+        }, 350);
+
+        return () => clearInterval(interval);
+    }, [progressModal.isOpen, progressModal.status]);
+
+    const handleCloseProgressModal = () => {
+        setProgressModal((prev) => ({ ...prev, isOpen: false }));
+    };
+
+    const handleReloadAfterRestore = () => {
+        window.location.reload();
+    };
+
+    const handleDownloadAgain = () => {
+        if (progressModal.downloadBlob && progressModal.downloadFilename) {
+            const url = URL.createObjectURL(progressModal.downloadBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = progressModal.downloadFilename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+    };
+
     const [autoDownload, setAutoDownload] = useState(() => {
         return localStorage.getItem('auto_download_backups') === 'true';
     });
@@ -208,13 +323,38 @@ const BackupRestore = ({ addNotification }) => {
 
     // Full system backup download
     const handleTakeBackup = async () => {
+        const jobId = `backup_${Date.now()}`;
         setIsBackingUp(true);
         setErrorMessage('');
         setSuccessMessage('');
+
+        // Open Circular Progress Modal
+        setProgressModal({
+            isOpen: true,
+            mode: 'backup',
+            status: 'processing',
+            progress: 8,
+            title: 'Exporting Full Database Backup',
+            actionText: 'Initiating full system database backup...',
+            stats: {
+                currentCollection: 0,
+                totalCollections: 51,
+                currentRecords: 0,
+                totalRecords: 0,
+                fileSize: '',
+                fileName: ''
+            },
+            errorMessage: '',
+            jobId,
+            downloadBlob: null,
+            downloadFilename: ''
+        });
+
         try {
             const queryParams = new URLSearchParams({
                 excludeEmployeeImages: excludeEmployeePhotos ? 'true' : 'false',
-                excludeAttachments: excludeAttachments ? 'true' : 'false'
+                excludeAttachments: excludeAttachments ? 'true' : 'false',
+                jobId
             });
             const response = await axios.get(`${API_BASE_URL}/api/backup-database?${queryParams.toString()}`);
             const backupObj = response.data;
@@ -237,14 +377,50 @@ const BackupRestore = ({ addNotification }) => {
             URL.revokeObjectURL(url);
 
             const sizeKB = (blob.size / 1024).toFixed(1);
-            setSuccessMessage(`Full system backup completed successfully! (${sizeKB} KB) Saved as ${filename}`);
+            const sizeMB = (blob.size / (1024 * 1024)).toFixed(2);
+            const displaySize = blob.size > 1024 * 1024 ? `${sizeMB} MB` : `${sizeKB} KB`;
+
+            let totalRecordsCount = 0;
+            let collectionsCount = 0;
+            if (backupObj.data) {
+                collectionsCount = Object.keys(backupObj.data).length;
+                Object.values(backupObj.data).forEach(arr => {
+                    if (Array.isArray(arr)) totalRecordsCount += arr.length;
+                });
+            }
+
+            setProgressModal(prev => ({
+                ...prev,
+                status: 'done',
+                progress: 100,
+                title: 'Full Backup Completed Successfully!',
+                actionText: `Saved ${filename} (${displaySize}) with ${totalRecordsCount.toLocaleString()} records across ${collectionsCount} collections.`,
+                stats: {
+                    currentCollection: collectionsCount,
+                    totalCollections: collectionsCount,
+                    totalRecords: totalRecordsCount,
+                    fileSize: displaySize,
+                    fileName: filename
+                },
+                downloadBlob: blob,
+                downloadFilename: filename
+            }));
+
+            setSuccessMessage(`Full system backup completed successfully! (${displaySize}) Saved as ${filename}`);
             if (addNotification) {
-                addNotification('System Backup', `Full database backup downloaded (${sizeKB} KB).`, ['admin'], [], true);
+                addNotification('System Backup', `Full database backup downloaded (${displaySize}).`, ['admin'], [], true);
             }
             fetchSettingsAndFiles();
         } catch (error) {
             console.error('Backup error:', error);
-            setErrorMessage(error.response?.data?.message || 'Error occurred while taking database backup.');
+            const errStr = error.response?.data?.message || 'Error occurred while taking database backup.';
+            setErrorMessage(errStr);
+            setProgressModal(prev => ({
+                ...prev,
+                status: 'error',
+                errorMessage: errStr,
+                actionText: 'Backup process failed. Please check network and server logs.'
+            }));
         } finally {
             setIsBackingUp(false);
         }
@@ -257,16 +433,43 @@ const BackupRestore = ({ addNotification }) => {
             return;
         }
 
+        const jobId = `backup_${Date.now()}`;
+        const keysArray = Array.from(selectedModuleKeys);
+        const modulesParam = keysArray.join(',');
+
         setIsBackingUp(true);
+        setShowModuleModal(false);
         setErrorMessage('');
         setSuccessMessage('');
+
+        // Open Circular Progress Modal
+        setProgressModal({
+            isOpen: true,
+            mode: 'backup',
+            status: 'processing',
+            progress: 10,
+            title: `Exporting Module Backup (${keysArray.length} Selected)`,
+            actionText: `Initiating backup for: ${keysArray.join(', ')}...`,
+            stats: {
+                currentCollection: 0,
+                totalCollections: keysArray.length,
+                currentRecords: 0,
+                totalRecords: 0,
+                fileSize: '',
+                fileName: ''
+            },
+            errorMessage: '',
+            jobId,
+            downloadBlob: null,
+            downloadFilename: ''
+        });
+
         try {
-            const keysArray = Array.from(selectedModuleKeys);
-            const modulesParam = keysArray.join(',');
             const queryParams = new URLSearchParams({
                 modules: modulesParam,
                 excludeEmployeeImages: excludeEmployeePhotos ? 'true' : 'false',
-                excludeAttachments: excludeAttachments ? 'true' : 'false'
+                excludeAttachments: excludeAttachments ? 'true' : 'false',
+                jobId
             });
             const response = await axios.get(`${API_BASE_URL}/api/backup-database?${queryParams.toString()}`);
             const backupObj = response.data;
@@ -288,15 +491,50 @@ const BackupRestore = ({ addNotification }) => {
             URL.revokeObjectURL(url);
 
             const sizeKB = (blob.size / 1024).toFixed(1);
-            setSuccessMessage(`Module backup completed! (${sizeKB} KB) Saved as ${filename}`);
-            if (addNotification) {
-                addNotification('Module Backup', `Module backup downloaded (${sizeKB} KB).`, ['admin'], [], true);
+            const sizeMB = (blob.size / (1024 * 1024)).toFixed(2);
+            const displaySize = blob.size > 1024 * 1024 ? `${sizeMB} MB` : `${sizeKB} KB`;
+
+            let totalRecordsCount = 0;
+            let collectionsCount = 0;
+            if (backupObj.data) {
+                collectionsCount = Object.keys(backupObj.data).length;
+                Object.values(backupObj.data).forEach(arr => {
+                    if (Array.isArray(arr)) totalRecordsCount += arr.length;
+                });
             }
-            setShowModuleModal(false);
+
+            setProgressModal(prev => ({
+                ...prev,
+                status: 'done',
+                progress: 100,
+                title: 'Module Backup Completed Successfully!',
+                actionText: `Saved ${filename} (${displaySize}) with ${totalRecordsCount.toLocaleString()} records across ${collectionsCount} collections.`,
+                stats: {
+                    currentCollection: collectionsCount,
+                    totalCollections: collectionsCount,
+                    totalRecords: totalRecordsCount,
+                    fileSize: displaySize,
+                    fileName: filename
+                },
+                downloadBlob: blob,
+                downloadFilename: filename
+            }));
+
+            setSuccessMessage(`Module backup completed! (${displaySize}) Saved as ${filename}`);
+            if (addNotification) {
+                addNotification('Module Backup', `Module backup downloaded (${displaySize}).`, ['admin'], [], true);
+            }
             fetchSettingsAndFiles();
         } catch (error) {
             console.error('Module backup error:', error);
-            setErrorMessage(error.response?.data?.message || 'Error occurred while taking module backup.');
+            const errStr = error.response?.data?.message || 'Error occurred while taking module backup.';
+            setErrorMessage(errStr);
+            setProgressModal(prev => ({
+                ...prev,
+                status: 'error',
+                errorMessage: errStr,
+                actionText: 'Module backup process failed.'
+            }));
         } finally {
             setIsBackingUp(false);
         }
@@ -479,51 +717,119 @@ const BackupRestore = ({ addNotification }) => {
             return;
         }
 
+        const jobId = `restore_${Date.now()}`;
+        const modelsToRestore = Array.from(selectedRestoreModels);
+
         setIsRestoring(true);
         setShowConfirmModal(false);
         setErrorMessage('');
         setSuccessMessage('');
 
+        // Open Circular Progress Modal
+        setProgressModal({
+            isOpen: true,
+            mode: 'restore',
+            status: 'processing',
+            progress: 10,
+            title: `Restoring Database (${modelsToRestore.length} Collections)`,
+            actionText: restoreTarget.type === 'uploaded' 
+                ? 'Uploading backup archive to server...' 
+                : 'Reading backup file on server...',
+            stats: {
+                currentCollection: 0,
+                totalCollections: modelsToRestore.length,
+                currentRecords: 0,
+                totalRecords: 0,
+                fileSize: '',
+                fileName: restoreTarget.filename || backupFile?.name || ''
+            },
+            errorMessage: '',
+            jobId,
+            downloadBlob: null,
+            downloadFilename: ''
+        });
+
         try {
             let response;
-            const modelsToRestore = Array.from(selectedRestoreModels);
 
             if (restoreTarget.type === 'uploaded') {
                 if (!backupFile) {
                     setErrorMessage('Please select a backup file first.');
+                    setProgressModal(prev => ({ ...prev, isOpen: false }));
+                    setIsRestoring(false);
                     return;
                 }
                 const formData = new FormData();
                 formData.append('backupFile', backupFile);
                 formData.append('selectedModels', JSON.stringify(modelsToRestore));
+                formData.append('jobId', jobId);
 
                 response = await axios.post(`${API_BASE_URL}/api/restore-database-upload`, formData, {
                     headers: { 'Content-Type': 'multipart/form-data' },
-                    timeout: 600000
+                    timeout: 600000,
+                    onUploadProgress: (progressEvent) => {
+                        if (progressEvent.total) {
+                            const uploadPercent = Math.round((progressEvent.loaded / progressEvent.total) * 20);
+                            setProgressModal(prev => ({
+                                ...prev,
+                                progress: Math.max(prev.progress, uploadPercent),
+                                actionText: uploadPercent < 20 
+                                    ? `Uploading backup file (${Math.round((progressEvent.loaded / progressEvent.total) * 100)}%)...` 
+                                    : 'Backup uploaded. Unpacking and restoring database records...'
+                            }));
+                        }
+                    }
                 });
             } else {
                 response = await axios.post(`${API_BASE_URL}/api/backup-files/${restoreTarget.filename}/restore`, {
-                    selectedModels: modelsToRestore
+                    selectedModels: modelsToRestore,
+                    jobId
                 }, {
                     timeout: 600000
                 });
             }
 
             if (response.data.success) {
+                const totalRestored = response.data.totalDocsRestored || 0;
+                setProgressModal(prev => ({
+                    ...prev,
+                    status: 'done',
+                    progress: 100,
+                    title: 'Database Restored Successfully!',
+                    actionText: response.data.message || `Restored ${totalRestored.toLocaleString()} records across ${modelsToRestore.length} collections.`,
+                    stats: {
+                        ...prev.stats,
+                        currentCollection: modelsToRestore.length,
+                        totalCollections: modelsToRestore.length,
+                        totalRecords: totalRestored
+                    }
+                }));
+
                 setSuccessMessage(response.data.message || 'Database restored successfully! Reloading page to apply changes...');
                 if (addNotification) {
                     addNotification('System Restore', `Restored ${modelsToRestore.length} collection(s) successfully.`, ['admin'], [], true);
                 }
-                setTimeout(() => {
-                    window.location.reload();
-                }, 2000);
             } else {
-                setErrorMessage(response.data.message || 'Failed to restore database.');
+                const errStr = response.data.message || 'Failed to restore database.';
+                setErrorMessage(errStr);
+                setProgressModal(prev => ({
+                    ...prev,
+                    status: 'error',
+                    errorMessage: errStr,
+                    actionText: 'Restore failed on server.'
+                }));
             }
         } catch (error) {
             console.error('Restore error:', error);
             const serverMsg = error.response?.data?.message || (typeof error.response?.data === 'string' && !error.response.data.startsWith('<') ? error.response.data : '');
-            setErrorMessage(serverMsg || error.message || 'Error occurred while restoring the database.');
+            const errStr = serverMsg || error.message || 'Error occurred while restoring the database.';
+            setErrorMessage(errStr);
+            setProgressModal(prev => ({
+                ...prev,
+                status: 'error',
+                errorMessage: errStr,
+                actionText: 'An error occurred during restore.'
+            }));
         } finally {
             setIsRestoring(false);
         }
@@ -1405,6 +1711,20 @@ const BackupRestore = ({ addNotification }) => {
                 </div>,
                 document.body
             )}
+            {/* Circular Progress Indicator Modal for Backup & Restore */}
+            <BackupProgressModal
+                isOpen={progressModal.isOpen}
+                mode={progressModal.mode}
+                status={progressModal.status}
+                progress={progressModal.progress}
+                title={progressModal.title}
+                actionText={progressModal.actionText}
+                stats={progressModal.stats}
+                errorMessage={progressModal.errorMessage}
+                onClose={handleCloseProgressModal}
+                onReload={handleReloadAfterRestore}
+                onDownloadAgain={handleDownloadAgain}
+            />
         </div>
     );
 };

@@ -8424,7 +8424,7 @@ apiRouter.get('/api/backup-database', adminOnly, async (req, res) => {
   try {
     const models = mongoose.connection.models;
     const backupData = {};
-    const { modules: moduleQuery, models: modelsQuery, excludeEmployeeImages, excludeAttachments } = req.query;
+    const { modules: moduleQuery, models: modelsQuery, excludeEmployeeImages, excludeAttachments, jobId } = req.query;
 
     const shouldExcludePhotos = excludeEmployeeImages === undefined || excludeEmployeeImages === 'true' || excludeEmployeeImages === true;
     const shouldExcludeAttachments = excludeAttachments === 'true' || excludeAttachments === true;
@@ -8443,10 +8443,13 @@ apiRouter.get('/api/backup-database', adminOnly, async (req, res) => {
       targetModelNames = new Set(modelsQuery.split(',').map(s => s.trim()).filter(Boolean));
     }
 
-    for (const modelName in models) {
-      if (targetModelNames && !targetModelNames.has(modelName)) {
-        continue;
-      }
+    const allModelKeys = Object.keys(models);
+    const targetKeys = targetModelNames ? allModelKeys.filter(m => targetModelNames.has(m)) : allModelKeys;
+    const totalModels = targetKeys.length;
+
+    let processedIdx = 0;
+    for (const modelName of targetKeys) {
+      processedIdx++;
       const Model = models[modelName];
       let documents = await Model.find({}).lean();
       documents = cleanBackupDocuments(modelName, documents, {
@@ -8454,6 +8457,31 @@ apiRouter.get('/api/backup-database', adminOnly, async (req, res) => {
         excludeAttachments: shouldExcludeAttachments
       });
       backupData[modelName] = documents;
+
+      if (io) {
+        const percent = Math.min(94, Math.round((processedIdx / Math.max(1, totalModels)) * 88) + 2);
+        io.emit('backup_progress', {
+          jobId: jobId || null,
+          stage: 'exporting',
+          current: processedIdx,
+          total: totalModels,
+          percent,
+          collectionName: modelName,
+          recordsCount: documents.length,
+          message: `Reading collection ${processedIdx} of ${totalModels}: ${modelName} (${documents.length} records)...`
+        });
+      }
+    }
+
+    if (io) {
+      io.emit('backup_progress', {
+        jobId: jobId || null,
+        stage: 'packaging',
+        current: totalModels,
+        total: totalModels,
+        percent: 97,
+        message: 'Packaging JSON backup data...'
+      });
     }
 
     res.json({
@@ -8473,8 +8501,8 @@ apiRouter.get('/api/backup-database', adminOnly, async (req, res) => {
   }
 });
 
-// Helper function to perform robust, batch-chunked database restore (supports optional selectedModels filter)
-const performDatabaseRestore = async (backupData, selectedModels = null) => {
+// Helper function to perform robust, batch-chunked database restore (supports optional selectedModels filter and jobId tracking)
+const performDatabaseRestore = async (backupData, selectedModels = null, jobId = null) => {
   const { data } = backupData;
   if (!data || typeof data !== 'object') {
     throw new Error('Invalid backup file structure: missing "data" object.');
@@ -8484,12 +8512,18 @@ const performDatabaseRestore = async (backupData, selectedModels = null) => {
   const restoredCollections = [];
   let totalDocsRestored = 0;
 
-  for (const modelName in data) {
-    // If selectedModels is provided, only restore those models
+  const targetModelNames = Object.keys(data).filter(modelName => {
     if (Array.isArray(selectedModels) && selectedModels.length > 0 && !selectedModels.includes(modelName)) {
-      continue;
+      return false;
     }
+    return true;
+  });
 
+  const totalModels = targetModelNames.length;
+  let processedIdx = 0;
+
+  for (const modelName of targetModelNames) {
+    processedIdx++;
     let Model = models[modelName];
     if (!Model) {
       try {
@@ -8500,6 +8534,22 @@ const performDatabaseRestore = async (backupData, selectedModels = null) => {
     }
 
     const documents = data[modelName];
+    const docCount = Array.isArray(documents) ? documents.length : 0;
+
+    if (io) {
+      const percent = Math.min(94, Math.round((processedIdx / Math.max(1, totalModels)) * 82) + 10);
+      io.emit('restore_progress', {
+        jobId: jobId || null,
+        stage: 'restoring',
+        current: processedIdx,
+        total: totalModels,
+        percent,
+        collectionName: modelName,
+        recordsCount: docCount,
+        message: `Restoring collection ${processedIdx} of ${totalModels}: ${modelName} (${docCount} records)...`
+      });
+    }
+
     if (Array.isArray(documents)) {
       // Clear existing records in this collection
       await Model.deleteMany({});
@@ -8515,6 +8565,17 @@ const performDatabaseRestore = async (backupData, selectedModels = null) => {
       restoredCollections.push(`${modelName} (${documents.length})`);
       totalDocsRestored += documents.length;
     }
+  }
+
+  if (io) {
+    io.emit('restore_progress', {
+      jobId: jobId || null,
+      stage: 'finalizing',
+      current: totalModels,
+      total: totalModels,
+      percent: 97,
+      message: 'Running database optimizations and system self-healing...'
+    });
   }
 
   // Run all self-healing migrations and database normalization after restore
@@ -8569,7 +8630,8 @@ apiRouter.post('/api/restore-database-upload', adminOnly, backupUpload.single('b
       }
     }
 
-    const result = await performDatabaseRestore(backupJson, selectedModels);
+    const jobId = req.body?.jobId || req.query?.jobId || null;
+    const result = await performDatabaseRestore(backupJson, selectedModels, jobId);
     res.json(result);
   } catch (err) {
     console.error('Restore database upload error:', err);
@@ -8588,7 +8650,8 @@ apiRouter.post('/api/restore-database', adminOnly, express.json({ limit: '200mb'
   try {
     const backupJson = req.body.backupData || req.body;
     const selectedModels = req.body.selectedModels || null;
-    const result = await performDatabaseRestore(backupJson, selectedModels);
+    const jobId = req.body?.jobId || req.query?.jobId || null;
+    const result = await performDatabaseRestore(backupJson, selectedModels, jobId);
     res.json(result);
   } catch (err) {
     console.error('Restore database error:', err);
@@ -8759,7 +8822,8 @@ apiRouter.post('/api/backup-files/:filename/restore', adminOnly, async (req, res
     }
     const backupData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
     const selectedModels = req.body && Array.isArray(req.body.selectedModels) ? req.body.selectedModels : null;
-    const result = await performDatabaseRestore(backupData, selectedModels);
+    const jobId = req.body?.jobId || req.query?.jobId || null;
+    const result = await performDatabaseRestore(backupData, selectedModels, jobId);
     res.json(result);
   } catch (err) {
     console.error('Saved backup restore error:', err);
