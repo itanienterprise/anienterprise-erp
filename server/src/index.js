@@ -6425,10 +6425,22 @@ apiRouter.delete('/api/fund-transfers/:id', async (req, res) => {
 
 apiRouter.put('/api/fund-transfers/:id', async (req, res) => {
   try {
-    const encryptedData = encryptData(req.body);
-    const updatedFundTransfer = await FundTransfer.findByIdAndUpdate(req.params.id, { data: encryptedData }, { returnDocument: 'after' });
-    if (!updatedFundTransfer) return res.status(404).json({ message: 'Fund transfer not found' });
-    const result = { ...req.body, _id: updatedFundTransfer._id, createdAt: updatedFundTransfer.createdAt };
+    const existingDoc = await FundTransfer.findById(req.params.id);
+    if (!existingDoc) return res.status(404).json({ message: 'Fund transfer not found' });
+
+    let existingData = {};
+    try {
+      existingData = decryptData(existingDoc.data) || {};
+    } catch (e) {
+      console.warn('Error decrypting existing fund transfer data:', e.message);
+    }
+
+    const mergedData = { ...existingData, ...req.body };
+    const encryptedData = encryptData(mergedData);
+    existingDoc.data = encryptedData;
+    await existingDoc.save();
+
+    const result = { ...mergedData, _id: existingDoc._id, createdAt: existingDoc.createdAt };
     broadcastUpdate('fund-transfers', 'update', { id: req.params.id, fundTransfer: result });
     req._broadcastDone = true;
     res.json(result);

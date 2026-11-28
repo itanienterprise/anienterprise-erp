@@ -593,6 +593,7 @@ const FundTransfer = ({ currentUser, onDeleteConfirm, isRequestedNotif, refreshP
     let updatePayload = {};
     if (isFirstStage) {
       updatePayload = {
+        ...item,
         smApproved: true,
         smApprovedBy: currentApproverId,
         smApprovedByName: currentApproverName,
@@ -601,6 +602,7 @@ const FundTransfer = ({ currentUser, onDeleteConfirm, isRequestedNotif, refreshP
       };
     } else if (newStatus === 'Accepted') {
       updatePayload = {
+        ...item,
         status: 'Accepted',
         approvedBy: currentApproverId,
         approvedByName: currentApproverName,
@@ -608,6 +610,7 @@ const FundTransfer = ({ currentUser, onDeleteConfirm, isRequestedNotif, refreshP
       };
     } else if (newStatus === 'Rejected') {
       updatePayload = {
+        ...item,
         status: 'Rejected',
         rejectedBy: currentApproverId,
         rejectedByName: currentApproverName,
@@ -1534,43 +1537,12 @@ const FundTransfer = ({ currentUser, onDeleteConfirm, isRequestedNotif, refreshP
                     )}
                     {/* Actions */}
                     <td className="py-3.5 px-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-center gap-1">
-                        {showRequestedApprovalButtons(ft) && (
-                          <>
-                            {!ft.smApproved ? (
-                              <button
-                                type="button"
-                                onClick={() => handleStatusUpdate(ft, 'FirstApprove')}
-                                title="Accept (1st Approval)"
-                                className="px-2 py-1 text-[11px] font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-xs transition cursor-pointer"
-                              >
-                                Accept
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleStatusUpdate(ft, 'Accepted')}
-                                title="Accept (Final Approval)"
-                                className="px-2 py-1 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-xs transition cursor-pointer"
-                              >
-                                Accept
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => handleStatusUpdate(ft, 'Rejected')}
-                              title="Reject Transfer"
-                              className="px-2 py-1 text-[11px] font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-lg shadow-xs transition cursor-pointer"
-                            >
-                              Reject
-                            </button>
-                          </>
-                        )}
+                      <div className="flex items-center justify-center space-x-1.5">
                         <button
                           type="button"
                           onClick={() => setViewingTransfer(ft)}
                           title="View Voucher"
-                          className="p-1.5 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition cursor-pointer"
+                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition cursor-pointer"
                         >
                           <EyeIcon className="w-4 h-4" />
                         </button>
@@ -1579,17 +1551,37 @@ const FundTransfer = ({ currentUser, onDeleteConfirm, isRequestedNotif, refreshP
                             type="button"
                             onClick={() => openEditModal(ft)}
                             title="Edit Transfer"
-                            className="p-1.5 text-gray-400 hover:text-amber-600 rounded-lg hover:bg-amber-50 transition cursor-pointer"
+                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition cursor-pointer"
                           >
                             <EditIcon className="w-4 h-4" />
                           </button>
                         )}
-                        {canDelete && (
+                        {showRequestedApprovalButtons(ft) && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleStatusUpdate(ft, !ft.smApproved ? 'FirstApprove' : 'Accepted')}
+                              title={ft.smApproved ? "Accept (Final Approval)" : "Accept (1st Approval)"}
+                              className="p-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition cursor-pointer"
+                            >
+                              <CheckIcon className="w-4 h-4 text-emerald-600" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleStatusUpdate(ft, 'Rejected')}
+                              title="Reject Transfer"
+                              className="p-1.5 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                            >
+                              <XIcon className="w-4 h-4 text-rose-600" />
+                            </button>
+                          </>
+                        )}
+                        {(ft.status || '').toLowerCase() !== 'requested' && canDelete && (
                           <button
                             type="button"
                             onClick={() => handleDeleteTransfer(ft._id)}
                             title="Delete Transfer"
-                            className="p-1.5 text-gray-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition cursor-pointer"
+                            className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
                           >
                             <TrashIcon className="w-4 h-4" />
                           </button>
@@ -1739,32 +1731,23 @@ const FundTransfer = ({ currentUser, onDeleteConfirm, isRequestedNotif, refreshP
                   <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                     {showRequestedApprovalButtons(ft) && (
                       <>
-                        {!ft.smApproved ? (
-                          <button
-                            type="button"
-                            onClick={() => handleStatusUpdate(ft, 'FirstApprove')}
-                            title="Accept (1st Approval)"
-                            className="px-2 py-1 text-[10px] font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-xs transition cursor-pointer"
-                          >
-                            Accept
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleStatusUpdate(ft, 'Accepted')}
-                            title="Accept (Final Approval)"
-                            className="px-2 py-1 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-xs transition cursor-pointer"
-                          >
-                            Accept
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleStatusUpdate(ft, !ft.smApproved ? 'FirstApprove' : 'Accepted')}
+                          title={ft.smApproved ? "Accept (Final Approval)" : "Accept (1st Approval)"}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition active:scale-95 cursor-pointer"
+                        >
+                          <CheckIcon className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Accept</span>
+                        </button>
                         <button
                           type="button"
                           onClick={() => handleStatusUpdate(ft, 'Rejected')}
                           title="Reject Transfer"
-                          className="px-2 py-1 text-[10px] font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-lg shadow-xs transition cursor-pointer"
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition active:scale-95 cursor-pointer"
                         >
-                          Reject
+                          <XIcon className="w-3.5 h-3.5 text-rose-600" />
+                          <span>Reject</span>
                         </button>
                       </>
                     )}

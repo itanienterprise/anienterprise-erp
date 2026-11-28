@@ -73,7 +73,7 @@ const BankLogo = ({
   bankName,
   className = "w-14 h-14",
   imgClassName = "w-full h-full object-contain p-1",
-  fallbackClassName = "w-full h-full flex items-center justify-center bg-blue-50 text-blue-600 rounded-2xl border border-blue-100",
+  fallbackClassName = "flex items-center justify-center bg-blue-50 text-blue-600 rounded-2xl border border-blue-100",
   showFallbackBuilding = true
 }) => {
   const [hasError, setHasError] = useState(false);
@@ -83,7 +83,7 @@ const BankLogo = ({
     return (
       <div className={`shrink-0 overflow-hidden ${className} ${fallbackClassName}`}>
         {showFallbackBuilding ? (
-          <BuildingIcon className="w-6 h-6 text-blue-600" />
+          <BuildingIcon className="w-1/2 h-1/2 max-w-6 max-h-6 text-blue-600" />
         ) : (
           <span className="font-bold text-sm uppercase text-blue-700">
             {(bankName || 'B').slice(0, 2)}

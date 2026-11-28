@@ -164,8 +164,8 @@ const SearchableFilterSelect = ({
   const currentText = displayValue || selectedOption?.label || value || '';
 
   const defaultInputClass = `w-full h-10 px-3 bg-gray-50/80 border border-gray-200 rounded-xl text-sm outline-none transition-all pr-8 ${value && !isOpen
-      ? 'font-semibold text-gray-900 bg-rose-50/40 border-rose-200'
-      : 'text-gray-700 focus:bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500'
+    ? 'font-semibold text-gray-900 bg-rose-50/40 border-rose-200'
+    : 'text-gray-700 focus:bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500'
     }`;
 
   const defaultLabelClass = "text-[10px] font-bold text-gray-400 uppercase tracking-wider block ml-0.5";
@@ -266,10 +266,10 @@ const SearchableFilterSelect = ({
                     setSearch('');
                   }}
                   className={`w-full px-3 py-2 text-left text-xs transition-colors flex items-center justify-between ${isSelected
-                      ? 'bg-rose-50 text-rose-700 font-bold'
-                      : isHighlighted
-                        ? 'bg-gray-100 text-gray-900'
-                        : 'text-gray-700 hover:bg-gray-50'
+                    ? 'bg-rose-50 text-rose-700 font-bold'
+                    : isHighlighted
+                      ? 'bg-gray-100 text-gray-900'
+                      : 'text-gray-700 hover:bg-gray-50'
                     }`}
                 >
                   <div className="truncate pr-2">
@@ -1452,11 +1452,10 @@ const Withdrawal = ({ currentUser, onDeleteConfirm, isRequestedNotif, refreshPen
                 <button
                   type="button"
                   onClick={() => setIsRequestedOnly(!isRequestedOnly)}
-                  className={`relative px-4 py-1.5 rounded-full text-xs font-bold transition-all border cursor-pointer ${
-                    isRequestedOnly
-                      ? 'bg-rose-600 border-rose-600 text-white shadow-md'
-                      : 'bg-white border-gray-200 text-gray-600 hover:border-rose-300 hover:text-rose-600 shadow-xs'
-                  }`}
+                  className={`relative px-4 py-1.5 rounded-full text-xs font-bold transition-all border cursor-pointer ${isRequestedOnly
+                    ? 'bg-rose-600 border-rose-600 text-white shadow-md'
+                    : 'bg-white border-gray-200 text-gray-600 hover:border-rose-300 hover:text-rose-600 shadow-xs'
+                    }`}
                 >
                   Requested
                   {requestedCount > 0 && (
@@ -1477,8 +1476,8 @@ const Withdrawal = ({ currentUser, onDeleteConfirm, isRequestedNotif, refreshPen
                 ref={filterButtonRef}
                 onClick={() => setShowFilterPanel(!showFilterPanel)}
                 className={`h-10 flex items-center justify-center gap-2 px-4 rounded-xl border transition-all active:scale-95 text-sm font-medium shadow-sm cursor-pointer ${showFilterPanel || isFilterActive
-                    ? 'bg-rose-600 border-rose-600 text-white shadow-lg shadow-rose-500/30'
-                    : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                  ? 'bg-rose-600 border-rose-600 text-white shadow-lg shadow-rose-500/30'
+                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
                   }`}
               >
                 <FunnelIcon className={`w-4 h-4 ${showFilterPanel || isFilterActive ? 'text-white' : 'text-gray-400'}`} />
@@ -2186,15 +2185,14 @@ const Withdrawal = ({ currentUser, onDeleteConfirm, isRequestedNotif, refreshPen
                           ৳{(Number(item.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                         <td className="px-5 py-4 whitespace-nowrap text-center">
-                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                            item.status === 'Requested'
-                              ? (getStatusBadgeText(item) === 'Pending 2nd Approval'
-                                ? 'bg-blue-50 text-blue-700 border border-blue-200/60'
-                                : 'bg-amber-50 text-amber-700 border border-amber-200/60')
-                              : item.status === 'Rejected'
-                                ? 'bg-red-50 text-red-700 border border-red-200/60'
-                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
-                          }`}>
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold ${item.status === 'Requested'
+                            ? (getStatusBadgeText(item) === 'Pending 2nd Approval'
+                              ? 'bg-blue-50 text-blue-700 border border-blue-200/60'
+                              : 'bg-amber-50 text-amber-700 border border-amber-200/60')
+                            : item.status === 'Rejected'
+                              ? 'bg-red-50 text-red-700 border border-red-200/60'
+                              : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                            }`}>
                             {getStatusBadgeText(item)}
                           </span>
                         </td>
@@ -2375,15 +2373,14 @@ const Withdrawal = ({ currentUser, onDeleteConfirm, isRequestedNotif, refreshPen
                           ৳{(Number(item.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
                         <div>
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            item.status === 'Requested'
-                              ? (getStatusBadgeText(item) === 'Pending 2nd Approval'
-                                ? 'bg-blue-50 text-blue-700 border border-blue-200/60'
-                                : 'bg-amber-50 text-amber-700 border border-amber-200/60')
-                              : item.status === 'Rejected'
-                                ? 'bg-red-50 text-red-700 border border-red-200/60'
-                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
-                          }`}>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${item.status === 'Requested'
+                            ? (getStatusBadgeText(item) === 'Pending 2nd Approval'
+                              ? 'bg-blue-50 text-blue-700 border border-blue-200/60'
+                              : 'bg-amber-50 text-amber-700 border border-amber-200/60')
+                            : item.status === 'Rejected'
+                              ? 'bg-red-50 text-red-700 border border-red-200/60'
+                              : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                            }`}>
                             {getStatusBadgeText(item)}
                           </span>
                         </div>
@@ -2397,15 +2394,14 @@ const Withdrawal = ({ currentUser, onDeleteConfirm, isRequestedNotif, refreshPen
                           <div className="flex items-start text-xs sm:text-sm">
                             <span className="w-28 text-gray-400 font-bold uppercase tracking-wider text-[11px] shrink-0">Status -</span>
                             <span className="font-bold flex-1">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                                item.status === 'Requested'
-                                  ? (getStatusBadgeText(item) === 'Pending 2nd Approval'
-                                    ? 'bg-blue-50 text-blue-700 border border-blue-200/60'
-                                    : 'bg-amber-50 text-amber-700 border border-amber-200/60')
-                                  : item.status === 'Rejected'
-                                    ? 'bg-red-50 text-red-700 border border-red-200/60'
-                                    : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
-                              }`}>
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold ${item.status === 'Requested'
+                                ? (getStatusBadgeText(item) === 'Pending 2nd Approval'
+                                  ? 'bg-blue-50 text-blue-700 border border-blue-200/60'
+                                  : 'bg-amber-50 text-amber-700 border border-amber-200/60')
+                                : item.status === 'Rejected'
+                                  ? 'bg-red-50 text-red-700 border border-red-200/60'
+                                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                                }`}>
                                 {getStatusBadgeText(item)}
                               </span>
                             </span>
@@ -2589,15 +2585,14 @@ const Withdrawal = ({ currentUser, onDeleteConfirm, isRequestedNotif, refreshPen
                   <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 font-bold">
                     {viewingWithdrawal.withdrawalType}
                   </span>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                    viewingWithdrawal.status === 'Requested'
-                      ? (getStatusBadgeText(viewingWithdrawal) === 'Pending 2nd Approval'
-                        ? 'bg-blue-50 text-blue-700 border border-blue-200/60'
-                        : 'bg-amber-50 text-amber-700 border border-amber-200/60')
-                      : viewingWithdrawal.status === 'Rejected'
-                        ? 'bg-red-50 text-red-700 border border-red-200/60'
-                        : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
-                  }`}>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${viewingWithdrawal.status === 'Requested'
+                    ? (getStatusBadgeText(viewingWithdrawal) === 'Pending 2nd Approval'
+                      ? 'bg-blue-50 text-blue-700 border border-blue-200/60'
+                      : 'bg-amber-50 text-amber-700 border border-amber-200/60')
+                    : viewingWithdrawal.status === 'Rejected'
+                      ? 'bg-red-50 text-red-700 border border-red-200/60'
+                      : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                    }`}>
                     {getStatusBadgeText(viewingWithdrawal)}
                   </span>
                 </div>
