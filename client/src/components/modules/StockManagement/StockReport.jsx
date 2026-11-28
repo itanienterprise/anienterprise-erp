@@ -199,6 +199,38 @@ const StockReport = ({
                     packetSize: validBrands.find(b => (b.packetSize || 0) > 0)?.packetSize || item.packetSize || 30
                 };
             }).filter(Boolean);
+        } else if (reportType === 'short') {
+            records = records.map(item => {
+                const validBrands = (item.brandList || []).filter(b => {
+                    const inHouse = b.inHouseQuantity || 0;
+                    const order = b.orderQuantity || 0;
+                    const saleable = b.saleableQuantity || 0;
+                    if (inHouse < -0.001 && order <= 0.001 && saleable >= -0.001) return false;
+                    return inHouse > 0.001 ||
+                        order > 0.001 ||
+                        (b.openingQuantity || 0) > 0.001 ||
+                        (b.saleQuantity || 0) > 0.001 ||
+                        Math.abs(saleable) > 0.001;
+                });
+                if (validBrands.length === 0) return null;
+                const inHouseQuantity = validBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
+                const totalInHouseQuantity = validBrands.reduce((sum, b) => sum + Math.max(0, b.totalInHouseQuantity || 0), 0);
+                const saleQuantity = validBrands.reduce((sum, b) => sum + (b.saleQuantity || 0), 0);
+                const salePacket = validBrands.reduce((sum, b) => sum + (parseFloat(b.salePacket) || 0), 0);
+                const saleableQuantity = validBrands.reduce((sum, b) => sum + Math.max(0, b.saleableQuantity || 0), 0);
+                const orderQuantity = validBrands.reduce((sum, b) => sum + (b.orderQuantity || 0), 0);
+                return {
+                    ...item,
+                    brandList: validBrands,
+                    inHouseQuantity,
+                    totalInHouseQuantity,
+                    saleQuantity,
+                    salePacket,
+                    saleableQuantity,
+                    orderQuantity,
+                    packetSize: validBrands.find(b => (b.packetSize || 0) > 0)?.packetSize || item.packetSize || 30
+                };
+            }).filter(Boolean);
         }
 
         // Apply brand filter from Advanced Filter panel
@@ -413,10 +445,15 @@ const StockReport = ({
         const records = (rawRecords || []).map(item => {
             const validBrands = (item.brandList || []).filter(b => {
                 if (reportType === 'short') {
-                    return Math.abs(b.inHouseQuantity || 0) > 0.001 ||
-                        (b.orderQuantity || 0) > 0.001 ||
+                    const inHouse = b.inHouseQuantity || 0;
+                    const order = b.orderQuantity || 0;
+                    const saleable = b.saleableQuantity || 0;
+                    if (inHouse < -0.001 && order <= 0.001 && saleable >= -0.001) return false;
+                    return inHouse > 0.001 ||
+                        order > 0.001 ||
                         (b.openingQuantity || 0) > 0.001 ||
-                        (b.saleQuantity || 0) > 0.001;
+                        (b.saleQuantity || 0) > 0.001 ||
+                        Math.abs(saleable) > 0.001;
                 }
                 if (reportType === 'price' || reportType === 'lc_price' || reportType === 'group') {
                     return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.saleableQuantity || 0) > 0.001;

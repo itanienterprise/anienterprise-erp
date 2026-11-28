@@ -345,7 +345,9 @@ export const reconcilePriceReportBrandList = (brandList, options = {}) => {
         // If no positive arrivals or pre-sold entries were added for this brand, preserve any genuine negative entries or active orders
         if (addedGroupEntries.length === 0) {
             const negEntry = group.entries.find(e => (e.closingQuantity !== undefined ? e.closingQuantity : (e.inHouseQuantity || 0)) < -0.001);
-            if (negEntry) {
+            const hasOrders = totalBrandOrderQty > 0.001 || totalBrandOrderPkt > 0.001;
+            const hasPeriodActivity = negEntry && (Math.abs(negEntry.saleQuantity || 0) > 0.001 || Math.abs(negEntry.periodArrivalQuantity || 0) > 0.001);
+            if (negEntry && (hasOrders || hasPeriodActivity)) {
                 const closing = (negEntry.closingQuantity !== undefined ? negEntry.closingQuantity : (negEntry.inHouseQuantity || 0));
                 const pktSize = negEntry.packetSize || 30;
                 const { whole, remainder } = calculatePktRemainder(closing, pktSize);
@@ -367,7 +369,7 @@ export const reconcilePriceReportBrandList = (brandList, options = {}) => {
                     saleableQuantity: saleableQty,
                     saleablePacket: saleablePacket
                 });
-            } else if (totalBrandOrderQty > 0.001 || totalBrandOrderPkt > 0.001) {
+            } else if (hasOrders) {
                 // In stock is zero, but brand has active orders: preserve entry so order is visible!
                 const repEntry = group.entries.find(e => (e.orderQuantity || 0) > 0) || group.entries[group.entries.length - 1] || group.entries[0];
                 const pktSize = repEntry?.packetSize || 30;
@@ -492,12 +494,17 @@ export const calculateStockData = (stockRecords, stockFilters, stockSearchQuery 
                 if (isPriceReport) {
                     groupedBrands = groupedBrands.filter(b => Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.saleableQuantity || 0) > 0.001);
                 } else if (stockFilters?.reportType === 'short') {
-                    groupedBrands = groupedBrands.filter(b =>
-                        Math.abs(b.inHouseQuantity || 0) > 0.001 ||
-                        (b.orderQuantity || 0) > 0.001 ||
-                        (b.openingQuantity || 0) > 0.001 ||
-                        (b.saleQuantity || 0) > 0.001
-                    );
+                    groupedBrands = groupedBrands.filter(b => {
+                        const inHouse = b.inHouseQuantity || 0;
+                        const order = b.orderQuantity || 0;
+                        const saleable = b.saleableQuantity || 0;
+                        if (inHouse < -0.001 && order <= 0.001 && saleable >= -0.001) return false;
+                        return inHouse > 0.001 ||
+                            order > 0.001 ||
+                            (b.openingQuantity || 0) > 0.001 ||
+                            (b.saleQuantity || 0) > 0.001 ||
+                            Math.abs(saleable) > 0.001;
+                    });
                 }
                 const inHouseQty = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHouseQuantity || 0), 0);
                 const inHousePkt = groupedBrands.reduce((sum, b) => sum + Math.max(0, b.inHousePacket || 0), 0);

@@ -8,6 +8,25 @@ class ErrorBoundary extends React.Component {
     }
 
     static getDerivedStateFromError(error) {
+        // Detect chunk loading failures caused by server redeployments or temporary network hiccups
+        const errMsg = error?.message || String(error || '');
+        const isChunkError =
+            errMsg.includes('dynamically imported module') ||
+            errMsg.includes('Loading chunk') ||
+            (errMsg.includes('Failed to fetch') && errMsg.includes('.js')) ||
+            error?.name === 'ChunkLoadError';
+
+        if (isChunkError && typeof window !== 'undefined') {
+            const lastReload = sessionStorage.getItem('chunk_reload_ts');
+            const now = Date.now();
+            // Prevent infinite reload loops: reload automatically only if not reloaded in the last 15 seconds
+            if (!lastReload || now - Number(lastReload) > 15000) {
+                sessionStorage.setItem('chunk_reload_ts', String(now));
+                window.location.reload();
+                return { hasError: false, error: null };
+            }
+        }
+
         return { hasError: true, error };
     }
 

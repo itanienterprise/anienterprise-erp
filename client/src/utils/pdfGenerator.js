@@ -965,7 +965,11 @@ export const generateStockReportPDF = async (stockData, filters, reportType = 's
             const sortedDisplayRecords = [...currentStockData.displayRecords].map(item => {
                 const validBrands = (item.brandList || []).filter(b => {
                     if (reportType === 'short') {
-                        return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001;
+                        const inHouse = b.inHouseQuantity || 0;
+                        const order = b.orderQuantity || 0;
+                        const saleable = b.saleableQuantity || 0;
+                        if (inHouse < -0.001 && order <= 0.001 && saleable >= -0.001) return false;
+                        return inHouse > 0.001 || order > 0.001 || Math.abs(saleable) > 0.001;
                     }
                     if (reportType === 'price' || reportType === 'lc_price' || reportType === 'group') {
                         return Math.abs(b.inHouseQuantity || 0) > 0.001 || (b.orderQuantity || 0) > 0.001 || Math.abs(b.saleableQuantity || 0) > 0.001;

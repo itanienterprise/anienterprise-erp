@@ -18,6 +18,18 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   });
 }
 
+// Automatically reload if a new deployment removed old chunks or a chunk failed to preload
+if (typeof window !== 'undefined') {
+  window.addEventListener('vite:preloadError', () => {
+    const lastReload = sessionStorage.getItem('chunk_preload_reload_ts');
+    const now = Date.now();
+    if (!lastReload || now - Number(lastReload) > 10000) {
+      sessionStorage.setItem('chunk_preload_reload_ts', String(now));
+      window.location.reload();
+    }
+  });
+}
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
